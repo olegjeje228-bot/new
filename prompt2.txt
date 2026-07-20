@@ -1,0 +1,1254 @@
+﻿using System;
+using EventHUD.AntiAdm;
+using EventHUD.AntiDdos;
+using EventHUD.EventHandlers;
+using EventHUD.Hud;
+using EventHUD.Medicine;
+using EventHUD.Radio;
+using EventHUD.Rpm;
+using EventHUD.Scp;
+using Exiled.API.Features;
+
+namespace EventHUD
+{
+    public class Plugin : Plugin<Config>
+    {
+        public static Plugin Instance { get; private set; }
+
+        public override string Name    => "EventHUD";
+        public override string Author  => "rustam";
+        public override Version Version => new Version(1, 2, 0);
+        public override Version RequiredExiledVersion => new Version(9, 14, 2);
+
+        public EffectScheduler Effects       { get; private set; }
+        public HudCompositor   Hud           { get; private set; }
+        public InjuryTickService InjuryTicks  { get; private set; }
+        public MedkitHealService MedkitHeals  { get; private set; }
+        public CriticalStateService CritState { get; private set; }
+        public BodyStunTickService StunTicks   { get; private set; }
+        public RegenTickService RegenTicks   { get; private set; }
+
+        private PlayerEventHandlers      _handlers;
+        private RadioEventHandlers       _radioHandlers;
+        private RadioBroadcastFilter     _radioFilter;
+        private ScpProximityVoiceFilter  _scpProximityVoiceFilter;
+        private MedicineEventHandlers    _medicineHandlers;
+        public AntiAdmCommandHandler    AntiAdmCommands;
+        private AntiAdmGrenadeHandler    _antiAdmGrenades;
+
+        public AntiAdmGrenadeDensityService AntiAdmGrenadeDensity { get; private set; }
+        public AntiAdmAntiLagService AntiLag { get; private set; }
+        public AntiDdosService AntiDdos { get; private set; }
+        public TpsOptimizerService TpsOptimizer { get; private set; }
+
+        public Scp106Handler Scp106 { get; private set; }
+        public Scp049Handler Scp049 { get; private set; }
+        public Scp3114Handler Scp3114 { get; private set; }
+        public Scp914Handler Scp914 { get; private set; }
+        public Scp096Handler Scp096 { get; private set; }
+        public AloneDummyService AloneDummy { get; private set; }
+        public HczArmoryService HczArmory { get; private set; }
+        public HelicopterCrushService HelicopterCrush { get; private set; }
+        public ScpTeslaProtectionService ScpTeslaProtection { get; private set; }
+
+        public override void OnEnabled()
+        {
+            Instance = this;
+
+            HudToggleService.Initialize(Config.HudEnabledByDefault);
+
+            Effects           = new EffectScheduler(Config);
+            Hud               = new HudCompositor(Config, Effects);
+            InjuryTicks       = new InjuryTickService();
+            MedkitHeals       = new MedkitHealService();
+            CritState         = new CriticalStateService();
+            StunTicks         = new BodyStunTickService();
+            RegenTicks        = new RegenTickService();
+
+            _handlers          = new PlayerEventHandlers();
+            _radioHandlers     = new RadioEventHandlers(Config);
+            _radioFilter       = new RadioBroadcastFilter();
+            _scpProximityVoiceFilter = new ScpProximityVoiceFilter();
+            _medicineHandlers  = new MedicineEventHandlers(Config);
+            AntiAdmCommands   = new AntiAdmCommandHandler(Config);
+            _antiAdmGrenades   = new AntiAdmGrenadeHandler(Config);
+            AntiAdmGrenadeDensity = new AntiAdmGrenadeDensityService(Config);
+            AntiLag            = new AntiAdmAntiLagService(Config);
+            AntiDdos           = new AntiDdosService(Config);
+            TpsOptimizer       = new TpsOptimizerService(Config);
+            Scp106             = new Scp106Handler(Config);
+            Scp049             = new Scp049Handler(Config);
+            Scp3114            = new Scp3114Handler(Config);
+            Scp914             = new Scp914Handler(Config);
+            Scp096             = new Scp096Handler();
+
+            // â”€â”€ Player events â”€â”€
+            Exiled.Events.Handlers.Player.Left                  += _handlers.OnLeft;
+            Exiled.Events.Handlers.Player.SendingValidCommand   += _handlers.OnSendingValidCommand;
+            Exiled.Events.Handlers.Player.Verified              += _handlers.OnVerified;
+            Exiled.Events.Handlers.Player.Escaping              += _handlers.OnEscaping;
+            Exiled.Events.Handlers.Player.TriggeringTesla       += _handlers.OnTriggeringTesla;
+
+            // â”€â”€ SCP events â”€â”€
+            Exiled.Events.Handlers.Player.Hurting               += Scp106.OnHurting;
+            Exiled.Events.Handlers.Player.EscapingPocketDimension      += Scp106.OnEscapingPocket;
+            Exiled.Events.Handlers.Player.FailingEscapePocketDimension += Scp106.OnFailingEscapePocket;
+            Exiled.Events.Handlers.Player.ChangingRole          += Scp3114.OnChangingRole;
+            Exiled.Events.Handlers.Player.ItemAdded             += Scp3114.OnItemAdded;
+            Exiled.Events.Handlers.Player.Shooting              += Scp3114.OnShooting;
+            Exiled.Events.Handlers.Player.DroppingItem          += Scp049.OnDroppingItem;
+            Exiled.Events.Handlers.Player.UsingItem             += Scp914.OnUsingItem;
+            Exiled.Events.Handlers.Player.ChangingRole          += Scp914.OnChangingRole;
+
+            // â”€â”€ Radio events â”€â”€
+            Exiled.Events.Handlers.Player.ItemAdded             += _radioHandlers.OnItemAdded;
+            Exiled.Events.Handlers.Player.ChangingRadioPreset   += _radioHandlers.OnChangingRadioPreset;
+            Exiled.Events.Handlers.Player.UsingRadioBattery     += _radioHandlers.OnUsingRadioBattery;
+            Exiled.Events.Handlers.Player.ReceivingVoiceMessage += _radioFilter.OnReceivingVoiceMessage;
+            Exiled.Events.Handlers.Player.ReceivingVoiceMessage += _scpProximityVoiceFilter.OnReceivingVoiceMessage;
+            Exiled.Events.Handlers.Player.ChangingRole          += _radioHandlers.OnChangingRole;
+
+            // â”€â”€ Medicine events â”€â”€
+            Exiled.Events.Handlers.Player.DroppingItem           += _medicineHandlers.OnDroppingItem;
+            Exiled.Events.Handlers.Player.Hurting                += _medicineHandlers.OnHurting;
+            Exiled.Events.Handlers.Player.UsedItem               += _medicineHandlers.OnUsedItem;
+            Exiled.Events.Handlers.Player.UsingItem              += _medicineHandlers.OnUsingItem;
+#pragma warning disable CS0612 // Type or member is obsolete
+
+            Exiled.Events.Handlers.Player.ItemAdded              += _medicineHandlers.OnItemAdded;
+#pragma warning restore CS0612 // Type or member is obsolete
+
+            Exiled.Events.Handlers.Player.Died                   += _medicineHandlers.OnDied;
+            Exiled.Events.Handlers.Player.ChangingRole           += _medicineHandlers.OnChangingRole;
+            Exiled.Events.Handlers.Player.ReceivingEffect        += _medicineHandlers.OnReceivingEffect;
+            Exiled.Events.Handlers.Player.EnteringPocketDimension += _medicineHandlers.OnEnteringPocketDimension;
+
+            // â”€â”€ Server events â”€â”€
+            Exiled.Events.Handlers.Server.RoundStarted += OnRoundStarted;
+            Exiled.Events.Handlers.Player.SendingValidCommand += AntiAdmCommands.OnSendingValidCommand;
+            Exiled.Events.Handlers.Player.Handcuffing += AntiAdmCommands.OnHandcuffing;
+
+            // â”€â”€ Map events (AntiAdm) â”€â”€
+            Exiled.Events.Handlers.Map.ExplodingGrenade += _antiAdmGrenades.OnExplodingGrenade;
+
+            // â”€â”€ AntiLag: Ð´ÐµÑ‚ÐµÐºÑ‚ Ð¼Ð°ÑÑÐ¾Ð²Ð¾Ð³Ð¾ ÑÐ¿Ð°Ð²Ð½Ð° Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² (map editor) â”€â”€
+            Exiled.Events.Handlers.Map.SpawningItem += OnSpawningItem;
+
+            // â”€â”€ AntiDdos events â”€â”€
+            Exiled.Events.Handlers.Player.PreAuthenticating += AntiDdos.OnPreAuthenticating;
+            Exiled.Events.Handlers.Player.Verified          += AntiDdos.OnVerified;
+
+            // Server-Specific Settings
+            ServerSpecificSettingsHandler.Register(Config);
+            MedkitSSSHandler.Register();
+            Scp106.RegisterSss();
+            Scp049ConditionService.Register();
+            Scp049.RegisterSss();
+            Scp914.RegisterSss();
+
+            EventHUD.Hud.SssRoleSync.Init(); // ÑÑ‚Ñ€Ð¾Ð³Ð¾ Ð¿Ð¾ÑÐ»Ðµ Ð²ÑÐµÑ… Register/RegisterSss
+            Exiled.Events.Handlers.Player.ChangingRole += EventHUD.Hud.SssRoleSync.OnChangingRole;
+            Exiled.Events.Handlers.Player.Verified     += EventHUD.Hud.SssRoleSync.OnVerified;
+
+            Effects.Start();
+            Hud.Start();
+            InjuryTicks.Start();
+            StunTicks.Start();
+            RegenTicks.Start();
+            AntiAdmGrenadeDensity.Start();
+            AntiLag.Start();
+            AntiDdos.Start();
+            TpsOptimizer.Start();
+            Scp049.Start();
+            Scp096.Start();
+            ScpTeslaProtection = new ScpTeslaProtectionService();
+            Exiled.Events.Handlers.Player.TriggeringTesla += ScpTeslaProtection.OnTriggeringTesla;
+            Exiled.Events.Handlers.Player.Hurting += ScpTeslaProtection.OnHurting;
+            AloneDummy = new AloneDummyService();
+            AloneDummy.Start();
+            HczArmory = new HczArmoryService();
+            HczArmory.Start();
+            HelicopterCrush = new HelicopterCrushService();
+            Exiled.Events.Handlers.Server.RespawnedTeam += HelicopterCrush.OnRespawnedTeam;
+
+            base.OnEnabled();
+        }
+
+        public override void OnDisabled()
+        {
+            // â”€â”€ Player events â”€â”€
+            Exiled.Events.Handlers.Player.Left                  -= _handlers.OnLeft;
+            Exiled.Events.Handlers.Player.SendingValidCommand   -= _handlers.OnSendingValidCommand;
+            Exiled.Events.Handlers.Player.Verified              -= _handlers.OnVerified;
+            Exiled.Events.Handlers.Player.Escaping              -= _handlers.OnEscaping;
+            Exiled.Events.Handlers.Player.TriggeringTesla       -= _handlers.OnTriggeringTesla;
+
+            // â”€â”€ SCP events â”€â”€
+            Exiled.Events.Handlers.Player.Hurting               -= Scp106.OnHurting;
+            Exiled.Events.Handlers.Player.EscapingPocketDimension      -= Scp106.OnEscapingPocket;
+            Exiled.Events.Handlers.Player.FailingEscapePocketDimension -= Scp106.OnFailingEscapePocket;
+            Exiled.Events.Handlers.Player.ChangingRole          -= Scp3114.OnChangingRole;
+            Exiled.Events.Handlers.Player.ItemAdded             -= Scp3114.OnItemAdded;
+            Exiled.Events.Handlers.Player.Shooting              -= Scp3114.OnShooting;
+            Exiled.Events.Handlers.Player.DroppingItem          -= Scp049.OnDroppingItem;
+            Exiled.Events.Handlers.Player.UsingItem             -= Scp914.OnUsingItem;
+            Exiled.Events.Handlers.Player.ChangingRole          -= Scp914.OnChangingRole;
+
+            // â”€â”€ Radio events â”€â”€
+            Exiled.Events.Handlers.Player.ItemAdded             -= _radioHandlers.OnItemAdded;
+            Exiled.Events.Handlers.Player.ChangingRadioPreset   -= _radioHandlers.OnChangingRadioPreset;
+            Exiled.Events.Handlers.Player.UsingRadioBattery     -= _radioHandlers.OnUsingRadioBattery;
+            Exiled.Events.Handlers.Player.ReceivingVoiceMessage -= _radioFilter.OnReceivingVoiceMessage;
+            Exiled.Events.Handlers.Player.ReceivingVoiceMessage -= _scpProximityVoiceFilter.OnReceivingVoiceMessage;
+            Exiled.Events.Handlers.Player.ChangingRole          -= _radioHandlers.OnChangingRole;
+
+            // â”€â”€ Medicine events â”€â”€
+            Exiled.Events.Handlers.Player.DroppingItem           -= _medicineHandlers.OnDroppingItem;
+            Exiled.Events.Handlers.Player.Hurting                -= _medicineHandlers.OnHurting;
+            Exiled.Events.Handlers.Player.UsedItem               -= _medicineHandlers.OnUsedItem;
+            Exiled.Events.Handlers.Player.UsingItem              -= _medicineHandlers.OnUsingItem;
+#pragma warning disable CS0612 // Type or member is obsolete
+
+            Exiled.Events.Handlers.Player.ItemAdded              -= _medicineHandlers.OnItemAdded;
+#pragma warning restore CS0612 // Type or member is obsolete
+
+            Exiled.Events.Handlers.Player.Died                   -= _medicineHandlers.OnDied;
+            Exiled.Events.Handlers.Player.ChangingRole           -= _medicineHandlers.OnChangingRole;
+            Exiled.Events.Handlers.Player.ReceivingEffect        -= _medicineHandlers.OnReceivingEffect;
+            Exiled.Events.Handlers.Player.EnteringPocketDimension -= _medicineHandlers.OnEnteringPocketDimension;
+
+            // â”€â”€ Server events â”€â”€
+            Exiled.Events.Handlers.Server.RoundStarted -= OnRoundStarted;
+            Exiled.Events.Handlers.Player.SendingValidCommand -= AntiAdmCommands.OnSendingValidCommand;
+            Exiled.Events.Handlers.Player.Handcuffing -= AntiAdmCommands.OnHandcuffing;
+
+            // â”€â”€ Map events (AntiAdm) â”€â”€
+            Exiled.Events.Handlers.Map.ExplodingGrenade -= _antiAdmGrenades.OnExplodingGrenade;
+
+            // â”€â”€ AntiLag â”€â”€
+            Exiled.Events.Handlers.Map.SpawningItem -= OnSpawningItem;
+
+            // â”€â”€ AntiDdos events â”€â”€
+            Exiled.Events.Handlers.Player.PreAuthenticating -= AntiDdos.OnPreAuthenticating;
+            Exiled.Events.Handlers.Player.Verified          -= AntiDdos.OnVerified;
+
+            Exiled.Events.Handlers.Player.ChangingRole -= EventHUD.Hud.SssRoleSync.OnChangingRole;
+            Exiled.Events.Handlers.Player.Verified     -= EventHUD.Hud.SssRoleSync.OnVerified;
+            EventHUD.Hud.SssRoleSync.Shutdown();
+
+            ServerSpecificSettingsHandler.Unregister();
+            MedkitSSSHandler.Unregister();
+            Scp106.UnregisterSss();
+            Scp049.UnregisterSss();
+            Scp914.UnregisterSss();
+
+            MedkitHeals.ClearAll();
+            CritState.CancelAll();
+            Effects.Stop();
+            Hud.Stop();
+            InjuryTicks.Stop();
+            StunTicks.Stop();
+            RegenTicks.Stop();
+            AntiAdmGrenadeDensity.Stop();
+            AntiLag.Stop();
+            AntiDdos.Stop();
+            TpsOptimizer.Stop();
+            Scp049ConditionService.Unregister();
+            Scp049.Stop();
+            Scp096.Stop();
+            AloneDummy?.Stop();
+            Exiled.Events.Handlers.Server.RespawnedTeam -= HelicopterCrush.OnRespawnedTeam;
+            Exiled.Events.Handlers.Player.TriggeringTesla -= ScpTeslaProtection.OnTriggeringTesla;
+            Exiled.Events.Handlers.Player.Hurting -= ScpTeslaProtection.OnHurting;
+
+            HudToggleService.Reset();
+            HudNoticeService.Reset();
+
+            Instance = null;
+
+            base.OnDisabled();
+        }
+
+        private void OnRoundStarted()
+        {
+            RadioFrequencyStorage.ClearAll();
+            RadioCustomFrequencyStorage.ClearAll();
+            MedicalStorage.ClearAll();
+            MedkitStorage.ClearAll();
+            MedkitInventoryStorage.ClearAll();
+            ArmorStorage.ClearAll();
+            RegenStorage.ClearAll();
+            ArmorRemovalStorage.ClearAll();
+            AntiDdos.Reset();
+            HudNoticeService.Reset();
+            Scp049?.ResetAll();
+            ScpProximityChat.Clear();
+            ArmorItemDurabilityStorage.ClearAll();
+            TpsOptimizer?.SnapshotMapItems();
+            EventHUD.Commands.TeslaCommand.Reset();
+            EventHUD.Commands.EscapeCommand.Reset();
+            AloneDummy?.Reset();
+            ScpTeslaProtection?.OnRoundRestart();
+        }
+
+        // â”€â”€ AntiLag: Ð¿Ñ€Ð¸ Ð¼Ð°ÑÑÐ¾Ð²Ð¾Ð¼ ÑÐ¿Ð°Ð²Ð½Ðµ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² (map editor) â€”
+        // Ð²Ñ€ÐµÐ¼ÐµÐ½Ð½Ð¾ Ð¾Ñ‚ÐºÐ»ÑŽÑ‡Ð°ÐµÐ¼ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÑƒ, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð½Ðµ ÑƒÐ´Ð°Ð»Ð¸Ñ‚ÑŒ Ð·Ð°ÑÐ¿Ð°Ð²Ð½ÐµÐ½Ð½Ñ‹Ðµ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ñ‹.
+        private DateTime _lastItemSpawn = DateTime.MinValue;
+        private int _itemSpawnBurst = 0;
+
+        private void OnSpawningItem(Exiled.Events.EventArgs.Map.SpawningItemEventArgs ev)
+        {
+            if (!Config.AntiAdmEnabled) return;
+
+            DateTime now = DateTime.UtcNow;
+            // Ð•ÑÐ»Ð¸ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ñ‹ ÑÐ¿Ð°Ð²Ð½ÑÑ‚ÑÑ Ñ‡Ð°ÑÑ‚Ð¾ (Ð±Ð¾Ð»ÐµÐµ 10 Ð·Ð° ÑÐµÐºÑƒÐ½Ð´Ñƒ) â€” ÑÑ‚Ð¾ map editor
+            if ((now - _lastItemSpawn).TotalSeconds <= 1.0)
+            {
+                _itemSpawnBurst++;
+                if (_itemSpawnBurst >= 10)
+                {
+                    AntiLag.TemporarilyDisable(Config.AntiLagMapEditorDisableSeconds);
+                    _itemSpawnBurst = 0;
+                }
+            }
+            else
+            {
+                _itemSpawnBurst = 1;
+            }
+            _lastItemSpawn = now;
+        }
+    }
+}
+using System.ComponentModel;
+using Exiled.API.Interfaces;
+
+namespace EventHUD
+{
+    public sealed class Config : IConfig
+    {
+        [Description("Ð’ÐºÐ»ÑŽÑ‡Ñ‘Ð½ Ð»Ð¸ Ð¿Ð»Ð°Ð³Ð¸Ð½")]
+        public bool IsEnabled { get; set; } = true;
+
+        [Description("Debug Ñ€ÐµÐ¶Ð¸Ð¼")]
+        public bool Debug { get; set; } = false;
+
+        // ===================== ÐžÐ‘Ð©Ð˜Ð™ Ð ÐÐ—ÐœÐ•Ð  Ð¨Ð Ð˜Ð¤Ð¢Ð =====================
+
+        [Description("Ð‘Ð°Ð·Ð¾Ð²Ñ‹Ð¹ Ñ€Ð°Ð·Ð¼ÐµÑ€ ÑˆÑ€Ð¸Ñ„Ñ‚Ð°")]
+        public int BaseFontSize { get; set; } = 21;
+
+        // ===================== Ð—ÐÐ“ÐžÐ›ÐžÐ’ÐžÐš =====================
+
+        [Description("Ð¢ÐµÐºÑÑ‚ Ð·Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ°")]
+        public string TitleText { get; set; } = "DLB Events";
+
+        [Description("Ð¦Ð²ÐµÑ‚ Ð·Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ°")]
+        public string TitleColor { get; set; } = "#C0C0C0";
+
+        [Description("Voffset Ð·Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ°")]
+        public float TitleVoffset { get; set; } = 62f;
+
+        [Description("Indent Ð·Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ°, %")]
+        public float TitleIndent { get; set; } = -29.3f;
+
+        // ===================== [id] [name] =====================
+
+        [Description("Voffset ÑÑ‚Ñ€Ð¾ÐºÐ¸ [id] [name]")]
+        public float NicknameVoffset { get; set; } = 61f;
+
+        [Description("Indent ÑÑ‚Ñ€Ð¾ÐºÐ¸ [id] [name], %")]
+        public float NicknameIndent { get; set; } = -29.9f;
+
+        [Description("Ð Ð°Ð·Ð¼ÐµÑ€ ÑˆÑ€Ð¸Ñ„Ñ‚Ð° [id] [name]")]
+        public int NicknameFontSize { get; set; } = 20;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼Ð°Ð»ÑŒÐ½Ð°Ñ Ð´Ð»Ð¸Ð½Ð° Ð ÐŸ Ð¸Ð¼ÐµÐ½Ð¸ Ð¿ÐµÑ€ÑÐ¾Ð½Ð°Ð¶Ð°")]
+        public int MaxRpNameLength { get; set; } = 24;
+
+        // ===================== CInfo =====================
+
+        [Description("Ð¢ÐµÐºÑÑ‚ Ð¼ÐµÑ‚ÐºÐ¸ Ð¿ÐµÑ€ÐµÐ´ CInfo")]
+        public string RoleLabelText { get; set; } = "CInfo";
+
+        [Description("Voffset Ð¼ÐµÑ‚ÐºÐ¸ 'CInfo:'")]
+        public float RoleLabelVoffset { get; set; } = 60f;
+
+        [Description("Indent Ð¼ÐµÑ‚ÐºÐ¸ 'CInfo:', %")]
+        public float RoleLabelIndent { get; set; } = -29.5f;
+
+        [Description("Voffset Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ CInfo")]
+        public float RoleValueVoffset { get; set; } = 60f;
+
+        [Description("Ð Ð°Ð·Ð¼ÐµÑ€ ÑˆÑ€Ð¸Ñ„Ñ‚Ð° Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ CInfo")]
+        public int RoleValueFontSize { get; set; } = 13;
+
+        [Description("Ð¦Ð²ÐµÑ‚ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ CInfo")]
+        public string RoleValueColor { get; set; } = "#00FFFF";
+
+        // ===================== Ð¡Ñ‚Ð°Ñ‚ÑƒÑ Ð¸Ð²ÐµÐ½Ñ‚Ð° =====================
+
+        [Description("Ð‘Ð°Ð·Ð¾Ð²Ð¾Ðµ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ðµ indent Ð´Ð»Ñ Ñ„Ð¾Ñ€Ð¼ÑƒÐ»Ñ‹ Ñ†ÐµÐ½Ñ‚Ñ€Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ñ")]
+        public float EventIndentBase { get; set; } = 47f;
+
+        [Description("ÐÐ°ÐºÐ»Ð¾Ð½ Ñ„Ð¾Ñ€Ð¼ÑƒÐ»Ñ‹ â€” Ð½Ð° ÑÐºÐ¾Ð»ÑŒÐºÐ¾ % Ð¼ÐµÐ½ÑÑ‚ÑŒ indent Ð·Ð° ÐºÐ°Ð¶Ð´Ñ‹Ð¹ ÑÐ¸Ð¼Ð²Ð¾Ð»")]
+        public float EventIndentSlope { get; set; } = 0.4f;
+
+        [Description("Voffset ÑÑ‚Ð°Ñ‚ÑƒÑÐ° Ð¸Ð²ÐµÐ½Ñ‚Ð°")]
+        public float EventVoffset { get; set; } = 63f;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼Ð°Ð»ÑŒÐ½Ð°Ñ Ð´Ð»Ð¸Ð½Ð° Ð½Ð°Ð·Ð²Ð°Ð½Ð¸Ñ Ð¸Ð²ÐµÐ½Ñ‚Ð°")]
+        public int MaxEventNameLength { get; set; } = 20;
+
+        // ===================== AFK / Ð¾Ñ‚ÑÑƒÑ‚ÑÑ‚Ð²Ð¸Ðµ Ñ…Ð¾ÑÑ‚Ð° =====================
+
+        [Description("Ð¦Ð²ÐµÑ‚ Ñ‚ÐµÐºÑÑ‚Ð° ÑÑ‚Ð°Ñ‚ÑƒÑÐ° Ð¸Ð²ÐµÐ½Ñ‚Ð°, ÐºÐ¾Ð³Ð´Ð° Ð¿Ñ€Ð¾Ð²Ð¾Ð´ÑÑ‰Ð¸Ð¹ Ð²Ñ‹ÑˆÐµÐ»")]
+        public string HostOfflineColor { get; set; } = "#555555";
+
+        [Description("Ð¦Ð²ÐµÑ‚ Ñ‚ÐµÐºÑÑ‚Ð° ÑÑ‚Ð°Ñ‚ÑƒÑÐ° Ð¸Ð²ÐµÐ½Ñ‚Ð° Ð¿Ñ€Ð¸ Ð²Ð¾Ð·Ð²Ñ€Ð°Ñ‚Ðµ Ð¿Ñ€Ð¾Ð²Ð¾Ð´ÑÑ‰ÐµÐ³Ð¾")]
+        public string HostReturnColor { get; set; } = "#00FF00";
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ Ð¿Ð¾Ð´ÑÐ²ÐµÑ‚ÐºÐ¸ Ð²Ð¾Ð·Ð²Ñ€Ð°Ñ‚Ð° Ð¿Ñ€Ð¾Ð²Ð¾Ð´ÑÑ‰ÐµÐ³Ð¾, ÑÐµÐº")]
+        public float HostReturnHighlightDuration { get; set; } = 3f;
+
+        [Description("Ð§ÐµÑ€ÐµÐ· ÑÐºÐ¾Ð»ÑŒÐºÐ¾ ÑÐµÐºÑƒÐ½Ð´ Ð±ÐµÐ·Ð´ÐµÐ¹ÑÑ‚Ð²Ð¸Ñ RA ÑÑ‡Ð¸Ñ‚Ð°ÐµÐ¼ AFK")]
+        public int AfkThresholdSeconds { get; set; } = 120;
+
+        [Description("Ð¢ÐµÐºÑÑ‚ AFK-Ñ€ÐµÐ¶Ð¸Ð¼Ð°")]
+        public string AfkText { get; set; } = "Ð¡ÐµÑ€Ð²ÐµÑ€ Ð² AFK-Ñ€ÐµÐ¶Ð¸Ð¼Ðµ";
+
+        [Description("Ð¦Ð²ÐµÑ‚ Ñ‚ÐµÐºÑÑ‚Ð° AFK-Ñ€ÐµÐ¶Ð¸Ð¼Ð°")]
+        public string AfkColor { get; set; } = "#555555";
+
+        // ===================== Ð­Ñ„Ñ„ÐµÐºÑ‚: ÐºÐ¾Ñ€Ð¾Ñ‚ÐºÐ¸Ð¹ Ð¿ÑƒÐ»ÑŒÑ =====================
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» ÐºÐ¾Ñ€Ð¾Ñ‚ÐºÐ¾Ð³Ð¾ Ð¿ÑƒÐ»ÑŒÑÐ°, ÑÐµÐº")]
+        public int MinutePulseIntervalSeconds { get; set; } = 60;
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ ÐºÐ¾Ñ€Ð¾Ñ‚ÐºÐ¾Ð³Ð¾ Ð¿ÑƒÐ»ÑŒÑÐ°, ÑÐµÐº")]
+        public float MinutePulseDuration { get; set; } = 2f;
+
+        [Description("Ð¦Ð²ÐµÑ‚ ÐºÐ¾Ñ€Ð¾Ñ‚ÐºÐ¾Ð³Ð¾ Ð¿ÑƒÐ»ÑŒÑÐ° (hex, Ð±ÐµÐ· Ñ€ÐµÑˆÑ‘Ñ‚ÐºÐ¸)")]
+        public string MinutePulseColor { get; set; } = "FF4444";
+
+        // ===================== Ð­Ñ„Ñ„ÐµÐºÑ‚: ÑÐ¸Ð»ÑŒÐ½Ñ‹Ð¹ Ñ„Ð»ÐµÑˆ =====================
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» ÑÐ¸Ð»ÑŒÐ½Ð¾Ð³Ð¾ Ñ„Ð»ÐµÑˆÐ°, ÑÐµÐº")]
+        public int ColorFlashIntervalSeconds { get; set; } = 300;
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ ÑÐ¸Ð»ÑŒÐ½Ð¾Ð³Ð¾ Ñ„Ð»ÐµÑˆÐ°, ÑÐµÐº")]
+        public float ColorFlashDuration { get; set; } = 2f;
+
+        [Description("Ð¦Ð²ÐµÑ‚ ÑÐ¸Ð»ÑŒÐ½Ð¾Ð³Ð¾ Ñ„Ð»ÐµÑˆÐ° (hex, Ð±ÐµÐ· Ñ€ÐµÑˆÑ‘Ñ‚ÐºÐ¸)")]
+        public string ColorFlashColor { get; set; } = "FF0000";
+
+        // ===================== Ð­Ñ„Ñ„ÐµÐºÑ‚Ñ‹: Ð¾Ð±Ñ‰ÐµÐµ =====================
+
+        [Description("ÐšÐ¾Ð»Ð¸Ñ‡ÐµÑÑ‚Ð²Ð¾ Ñ†Ð²ÐµÑ‚Ð¾Ð²Ñ‹Ñ… ÑˆÐ°Ð³Ð¾Ð² Ð·Ð° Ñ†Ð¸ÐºÐ» ÑÑ„Ñ„ÐµÐºÑ‚Ð°")]
+        public int EffectColorSteps { get; set; } = 20;
+
+        [Description("ÐšÐ°Ðº Ñ‡Ð°ÑÑ‚Ð¾ Ð¾Ñ‚Ð¿Ñ€Ð°Ð²Ð»ÑÑ‚ÑŒ HUD Ð²Ð¾ Ð²Ñ€ÐµÐ¼Ñ ÑÑ„Ñ„ÐµÐºÑ‚Ð°, ÑÐµÐº")]
+        public float EffectTickInterval { get; set; } = 0.15f;
+
+        // ===================== ÐŸÑ€Ð¾Ñ‡ÐµÐµ =====================
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» Ð¾Ð±Ð½Ð¾Ð²Ð»ÐµÐ½Ð¸Ñ HUD Ð² Ð¾Ð±Ñ‹Ñ‡Ð½Ð¾Ð¼ Ñ€ÐµÐ¶Ð¸Ð¼Ðµ, ÑÐµÐº")]
+        public float HudUpdateInterval { get; set; } = 0.15f;
+
+        [Description("ÐŸÐ¾ÐºÐ°Ð·Ñ‹Ð²Ð°Ñ‚ÑŒ Ð»Ð¸ HUD Ð¿Ð¾ ÑƒÐ¼Ð¾Ð»Ñ‡Ð°Ð½Ð¸ÑŽ")]
+        public bool HudEnabledByDefault { get; set; } = true;
+
+        [Description("Ð¡ÐºÐ¾Ð»ÑŒÐºÐ¾ ÑÐµÐºÑƒÐ½Ð´ Ð´ÐµÑ€Ð¶Ð°Ñ‚ÑŒ ÑÑ‚Ñ€Ð¾ÐºÑƒ 'Ð˜Ð²ÐµÐ½Ñ‚ Ð·Ð°ÐºÐ°Ð½Ñ‡Ð¸Ð²Ð°ÐµÑ‚ÑÑ' Ð¿ÐµÑ€ÐµÐ´ ÑÐ±Ñ€Ð¾ÑÐ¾Ð¼")]
+        public float StopLingerSeconds { get; set; } = 5f;
+
+        // ===================== RP-Ð¼Ð¾Ð´ÑƒÐ»ÑŒ: Ð Ð°Ñ†Ð¸Ñ =====================
+
+        [Description("ÐœÐ¸Ð½Ð¸Ð¼Ð°Ð»ÑŒÐ½Ð°Ñ Ð´Ð¾Ð¿ÑƒÑÑ‚Ð¸Ð¼Ð°Ñ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ð° Ñ€Ð°Ñ†Ð¸Ð¸")]
+        public float RadioFreqMin { get; set; } = 10.0f;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼Ð°Ð»ÑŒÐ½Ð°Ñ Ð´Ð¾Ð¿ÑƒÑÑ‚Ð¸Ð¼Ð°Ñ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ð° Ñ€Ð°Ñ†Ð¸Ð¸")]
+        public float RadioFreqMax { get; set; } = 390.0f;
+
+        [Description("Ð§Ð°ÑÑ‚Ð¾Ñ‚Ð° Ð²Ð¾Ð»Ð½Ñ‹ '?'")]
+        public float RadioFreqUnknown { get; set; } = 15.0f;
+
+        [Description("Ð§Ð°ÑÑ‚Ð¾Ñ‚Ð° Ð²Ð¾Ð»Ð½Ñ‹ 'ÐšÐ¾Ð¼Ð¿Ð»ÐµÐºÑ'")]
+        public float RadioFreqFacility { get; set; } = 95.0f;
+
+        [Description("Ð§Ð°ÑÑ‚Ð¾Ñ‚Ð° Ð²Ð¾Ð»Ð½Ñ‹ 'Ð¡Ð‘'")]
+        public float RadioFreqSecurity { get; set; } = 150.0f;
+
+        [Description("Ð§Ð°ÑÑ‚Ð¾Ñ‚Ð° Ð²Ð¾Ð»Ð½Ñ‹ 'ÐœÐžÐ“'")]
+        public float RadioFreqMtf { get; set; } = 200.0f;
+
+        [Description("Ð§Ð°ÑÑ‚Ð¾Ñ‚Ð° Ð²Ð¾Ð»Ð½Ñ‹ 'ÐŸÐ¥'")]
+        public float RadioFreqChaos { get; set; } = 250.0f;
+
+        [Description("Ð¢ÐµÐºÑÑ‚ ÑÑ‚Ñ€Ð¾ÐºÐ¸ Ð²Ð¾Ð»Ð½Ñ‹ Ñ€Ð°Ñ†Ð¸Ð¸ Ð² HUD")]
+        public string RadioWaveLabel { get; set; } = "Ð’Ð¾Ð»Ð½Ð° Ñ€Ð°Ñ†Ð¸Ð¸";
+
+        [Description("Voffset ÑÑ‚Ñ€Ð¾ÐºÐ¸ Ð²Ð¾Ð»Ð½Ñ‹ Ñ€Ð°Ñ†Ð¸Ð¸")]
+        public float RadioWaveVoffset { get; set; } = 59f;
+
+        [Description("Indent ÑÑ‚Ñ€Ð¾ÐºÐ¸ Ð²Ð¾Ð»Ð½Ñ‹ Ñ€Ð°Ñ†Ð¸Ð¸, %")]
+        public float RadioWaveIndent { get; set; } = -29.5f;
+
+        [Description("Ð¨Ð°Ð±Ð»Ð¾Ð½ Ñ…Ð¸Ð½Ñ‚Ð° ÑÐ¼ÐµÐ½Ñ‹ Ñ€ÐµÐ¶Ð¸Ð¼Ð°. {0}=Ñ†Ð²ÐµÑ‚, {1}=Ð½Ð°Ð·Ð²Ð°Ð½Ð¸Ðµ")]
+        public string RadioSwitchHintTemplate { get; set; } = "ÐŸÐµÑ€ÐµÐºÐ»ÑŽÑ‡ÐµÐ½ Ñ€ÐµÐ¶Ð¸Ð¼ Ñ€Ð°Ñ†Ð¸Ð¸: <color={0}>{1}</color>";
+
+        [Description("Voffset Ñ…Ð¸Ð½Ñ‚Ð° ÑÐ¼ÐµÐ½Ñ‹ Ñ€ÐµÐ¶Ð¸Ð¼Ð°")]
+        public float RadioSwitchHintVoffset { get; set; } = 15f;
+
+        [Description("Indent Ñ…Ð¸Ð½Ñ‚Ð° ÑÐ¼ÐµÐ½Ñ‹ Ñ€ÐµÐ¶Ð¸Ð¼Ð°, %")]
+        public float RadioSwitchHintIndent { get; set; } = 26f;
+
+        [Description("Ð Ð°Ð·Ð¼ÐµÑ€ ÑˆÑ€Ð¸Ñ„Ñ‚Ð° Ñ…Ð¸Ð½Ñ‚Ð° ÑÐ¼ÐµÐ½Ñ‹ Ñ€ÐµÐ¶Ð¸Ð¼Ð°")]
+        public int RadioSwitchHintFontSize { get; set; } = 35;
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ Ñ…Ð¸Ð½Ñ‚Ð° ÑÐ¼ÐµÐ½Ñ‹ Ñ€ÐµÐ¶Ð¸Ð¼Ð°, ÑÐµÐº")]
+        public float RadioSwitchHintDuration { get; set; } = 1f;
+
+        [Description("ID ÑÐ»Ð°Ð¹Ð´ÐµÑ€Ð° Radio HZ Ð² Server-Specific Settings (Ð½Ðµ Ð¼ÐµÐ½ÑÑ‚ÑŒ Ð±ÐµÐ· Ð¿Ñ€Ð¸Ñ‡Ð¸Ð½Ñ‹)")]
+        public int RadioHzSettingId { get; set; } = 9001;
+
+        // ===================== RP-Ð¼Ð¾Ð´ÑƒÐ»ÑŒ: ÐœÐµÐ´Ð¸Ñ†Ð¸Ð½Ð° =====================
+
+        [Description("ÐŸÐ¾Ñ€Ð¾Ð³ Ð¿ÐµÑ€ÐµÐ´Ð¾Ð·Ð° Ð°Ð´Ñ€ÐµÐ½Ð°Ð»Ð¸Ð½Ð¾Ð¼ (ÐºÐ¾Ð»-Ð²Ð¾ Ð·Ð° Ð¶Ð¸Ð·Ð½ÑŒ)")]
+        public int AdrenalineOverdoseThreshold { get; set; } = 3;
+
+        [Description("ÐŸÐ¾Ñ€Ð¾Ð³ Ð¿ÐµÑ€ÐµÐ´Ð¾Ð·Ð° Ð¾Ð±ÐµÐ·Ð±Ð¾Ð»Ð¸Ð²Ð°ÑŽÑ‰Ð¸Ð¼ (ÐºÐ¾Ð»-Ð²Ð¾ Ð·Ð° Ð¶Ð¸Ð·Ð½ÑŒ)")]
+        public int PainkillerOverdoseThreshold { get; set; } = 4;
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ ÑÑ„Ñ„ÐµÐºÑ‚Ð¾Ð² Ð¿ÐµÑ€ÐµÐ´Ð¾Ð·Ð°, ÑÐµÐº")]
+        public float OverdoseEffectDuration { get; set; } = 25f;
+
+        [Description("Intensity Slowness Ð¿Ñ€Ð¸ Ð¿ÐµÑ€ÐµÐ´Ð¾Ð·Ðµ")]
+        public byte OverdoseSlownessIntensity { get; set; } = 55;
+
+        [Description("Intensity Asphyxiated Ð¿Ñ€Ð¸ Ð¿ÐµÑ€ÐµÐ´Ð¾Ð·Ðµ")]
+        public byte OverdoseAsphyxiatedIntensity { get; set; } = 25;
+
+        [Description("ÐœÐ°ÐºÑ. ÑƒÑ€Ð¾Ð½ Ð¾Ñ‚ Ð³Ñ€Ð°Ð½Ð°Ñ‚Ñ‹ Ð´Ð»Ñ ÐºÐ°Ð¿Ð¸Ð»Ð»ÑÑ€Ð½Ð¾Ð³Ð¾ ÐºÑ€Ð¾Ð²Ð¾Ñ‚ÐµÑ‡ÐµÐ½Ð¸Ñ")]
+        public float LightBleedGrenadeMaxDamage { get; set; } = 10f;
+
+        [Description("ÐœÐ°ÐºÑ. ÑƒÑ€Ð¾Ð½ Ð¾Ñ‚ Ð¿Ð°Ð´ÐµÐ½Ð¸Ñ Ð´Ð»Ñ ÐºÐ°Ð¿Ð¸Ð»Ð»ÑÑ€Ð½Ð¾Ð³Ð¾ ÐºÑ€Ð¾Ð²Ð¾Ñ‚ÐµÑ‡ÐµÐ½Ð¸Ñ")]
+        public float LightBleedFallMaxDamage { get; set; } = 15f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Concussed Ð¿Ñ€Ð¸ ÐºÐ°Ð¿Ð¸Ð»Ð»ÑÑ€Ð½Ð¾Ð¼, ÑÐµÐº")]
+        public float LightBleedConcussedDuration { get; set; } = 5f;
+
+        [Description("Ð£Ñ€Ð¾Ð½/ÑÐµÐº Ð±ÑƒÑ€Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ ÐºÐ°Ð¿Ð¸Ð»Ð»ÑÑ€Ð½Ð¾Ð³Ð¾")]
+        public float LightBleedBurstDps { get; set; } = 2f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ Ð±ÑƒÑ€Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ ÐºÐ°Ð¿Ð¸Ð»Ð»ÑÑ€Ð½Ð¾Ð³Ð¾, ÑÐµÐº")]
+        public float LightBleedBurstDuration { get; set; } = 5f;
+
+        [Description("Ð£Ñ€Ð¾Ð½ Ð¿Ð°ÑÑÐ¸Ð²Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ ÐºÐ°Ð¿Ð¸Ð»Ð»ÑÑ€Ð½Ð¾Ð³Ð¾ Ð·Ð° Ð¸Ð½Ñ‚ÐµÑ€Ð²Ð°Ð»")]
+        public float LightBleedPassiveDps { get; set; } = 1f;
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» Ð¿Ð°ÑÑÐ¸Ð²Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ ÐºÐ°Ð¿Ð¸Ð»Ð»ÑÑ€Ð½Ð¾Ð³Ð¾, ÑÐµÐº")]
+        public float LightBleedPassiveInterval { get; set; } = 10f;
+
+        [Description("ÐœÐ¸Ð½. ÑƒÑ€Ð¾Ð½ Ð¾Ñ‚ Ð³Ñ€Ð°Ð½Ð°Ñ‚Ñ‹ Ð´Ð»Ñ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð³Ð¾")]
+        public float MediumBleedGrenadeMinDamage { get; set; } = 15f;
+
+        [Description("ÐœÐ°ÐºÑ. ÑƒÑ€Ð¾Ð½ Ð¾Ñ‚ Ð³Ñ€Ð°Ð½Ð°Ñ‚Ñ‹ Ð´Ð»Ñ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð³Ð¾")]
+        public float MediumBleedGrenadeMaxDamage { get; set; } = 50f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Concussed Ð¿Ñ€Ð¸ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð¼, ÑÐµÐº")]
+        public float MediumBleedConcussedDuration { get; set; } = 10f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Deafened Ð¿Ñ€Ð¸ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð¼, ÑÐµÐº")]
+        public float MediumBleedDeafenedDuration { get; set; } = 15f;
+
+        [Description("Intensity Blindness Ð¿Ñ€Ð¸ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð¼")]
+        public byte MediumBleedBlindnessIntensity { get; set; } = 40;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Blindness Ð¿Ñ€Ð¸ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð¼, ÑÐµÐº")]
+        public float MediumBleedBlindnessDuration { get; set; } = 30f;
+
+        [Description("Ð£Ñ€Ð¾Ð½/ÑÐµÐº Ð±ÑƒÑ€Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð³Ð¾")]
+        public float MediumBleedBurstDps { get; set; } = 6f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ Ð±ÑƒÑ€Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð³Ð¾, ÑÐµÐº")]
+        public float MediumBleedBurstDuration { get; set; } = 5f;
+
+        [Description("Ð£Ñ€Ð¾Ð½ Ð¿Ð°ÑÑÐ¸Ð²Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð³Ð¾ Ð·Ð° Ð¸Ð½Ñ‚ÐµÑ€Ð²Ð°Ð»")]
+        public float MediumBleedPassiveDps { get; set; } = 3f;
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» Ð¿Ð°ÑÑÐ¸Ð²Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ Ð²ÐµÐ½Ð¾Ð·Ð½Ð¾Ð³Ð¾, ÑÐµÐº")]
+        public float MediumBleedPassiveInterval { get; set; } = 10f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Concussed Ð¿Ñ€Ð¸ Ð°Ñ€Ñ‚ÐµÑ€Ð¸Ð°Ð»ÑŒÐ½Ð¾Ð¼, ÑÐµÐº")]
+        public float HeavyBleedConcussedDuration { get; set; } = 10f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Deafened Ð¿Ñ€Ð¸ Ð°Ñ€Ñ‚ÐµÑ€Ð¸Ð°Ð»ÑŒÐ½Ð¾Ð¼, ÑÐµÐº")]
+        public float HeavyBleedDeafenedDuration { get; set; } = 15f;
+
+        [Description("Intensity Blindness Ð¿Ñ€Ð¸ Ð°Ñ€Ñ‚ÐµÑ€Ð¸Ð°Ð»ÑŒÐ½Ð¾Ð¼")]
+        public byte HeavyBleedBlindnessIntensity { get; set; } = 40;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Blindness Ð¿Ñ€Ð¸ Ð°Ñ€Ñ‚ÐµÑ€Ð¸Ð°Ð»ÑŒÐ½Ð¾Ð¼, ÑÐµÐº")]
+        public float HeavyBleedBlindnessDuration { get; set; } = 30f;
+
+        [Description("Ð£Ñ€Ð¾Ð½/ÑÐµÐº Ð±ÑƒÑ€Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ Ð°Ñ€Ñ‚ÐµÑ€Ð¸Ð°Ð»ÑŒÐ½Ð¾Ð³Ð¾")]
+        public float HeavyBleedBurstDps { get; set; } = 2f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ Ð±ÑƒÑ€Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ Ð°Ñ€Ñ‚ÐµÑ€Ð¸Ð°Ð»ÑŒÐ½Ð¾Ð³Ð¾, ÑÐµÐº")]
+        public float HeavyBleedBurstDuration { get; set; } = 30f;
+
+        [Description("Ð£Ñ€Ð¾Ð½ Ð¿Ð°ÑÑÐ¸Ð²Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ Ð°Ñ€Ñ‚ÐµÑ€Ð¸Ð°Ð»ÑŒÐ½Ð¾Ð³Ð¾ Ð·Ð° Ð¸Ð½Ñ‚ÐµÑ€Ð²Ð°Ð»")]
+        public float HeavyBleedPassiveDps { get; set; } = 5f;
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» Ð¿Ð°ÑÑÐ¸Ð²Ð½Ð¾Ð¹ Ñ„Ð°Ð·Ñ‹ Ð°Ñ€Ñ‚ÐµÑ€Ð¸Ð°Ð»ÑŒÐ½Ð¾Ð³Ð¾, ÑÐµÐº")]
+        public float HeavyBleedPassiveInterval { get; set; } = 10f;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ flashbang Ð´Ð»Ñ ÐºÐ¾Ð½Ñ‚ÑƒÐ·Ð¸Ð¸, Ð¼")]
+        public float ConcussionFlashRadius { get; set; } = 15f;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð³Ñ€Ð°Ð½Ð°Ñ‚Ñ‹ Ð´Ð»Ñ ÐºÐ¾Ð½Ñ‚ÑƒÐ·Ð¸Ð¸, Ð¼")]
+        public float ConcussionGrenadeRadius { get; set; } = 30f;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð´Ð»Ñ ÑÐ¸Ð»ÑŒÐ½Ð¾Ð¹ ÐºÐ¾Ð½Ñ‚ÑƒÐ·Ð¸Ð¸, Ð¼")]
+        public float SevereConcussionRadius { get; set; } = 5f;
+
+        [Description("Ð’Ñ€ÐµÐ¼Ñ Ñ€ÑÐ´Ð¾Ð¼ Ñ SCP-106 Ð´Ð¾ ÐºÐ¾Ñ€Ñ€Ð¾Ð·Ð¸Ð¸, ÑÐµÐº")]
+        public float CorrosionProximityTime { get; set; } = 3f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Stained Ð¿Ñ€Ð¸ ÐºÐ¾Ñ€Ñ€Ð¾Ð·Ð¸Ð¸, ÑÐµÐº")]
+        public float CorrosionStainedDuration { get; set; } = 3000f;
+
+        [Description("Intensity Blindness Ð¿Ñ€Ð¸ ÐºÐ¾Ñ€Ñ€Ð¾Ð·Ð¸Ð¸")]
+        public byte CorrosionBlindnessIntensity { get; set; } = 45;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Concussed Ð¿Ñ€Ð¸ ÐºÐ¾Ñ€Ñ€Ð¾Ð·Ð¸Ð¸, ÑÐµÐº")]
+        public float CorrosionConcussedDuration { get; set; } = 3000f;
+
+        [Description("Ð’Ñ€ÐµÐ¼Ñ Ð² SCP-244 Ð´Ð¾ Ñ…Ð¸Ð¼Ð¸Ñ‡ÐµÑÐºÐ¾Ð¹ Ñ‚Ñ€Ð°Ð²Ð¼Ñ‹, ÑÐµÐº")]
+        public float Scp244ProximityTime { get; set; } = 10f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Concussed Ð¿Ñ€Ð¸ Ñ…Ð¸Ð¼Ð¸Ñ‡ÐµÑÐºÐ¾Ð¹ Ñ‚Ñ€Ð°Ð²Ð¼Ðµ, ÑÐµÐº")]
+        public float ChemicalConcussedDuration { get; set; } = 60f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Burned Ð¿Ñ€Ð¸ Ð¾Ð¶Ð¾Ð³Ðµ Ð¾Ñ‚ Micro-HID, ÑÐµÐº")]
+        public float BurnDuration { get; set; } = 10f;
+
+        [Description("Intensity Slowness Ð¿Ñ€Ð¸ Ð¿ÐµÑ€ÐµÐ»Ð¾Ð¼Ðµ")]
+        public byte FractureSlownessIntensity { get; set; } = 70;
+
+        [Description("Ð”Ð»Ð¸Ñ‚. Concussed Ð¿Ñ€Ð¸ Ð¿ÐµÑ€ÐµÐ»Ð¾Ð¼Ðµ, ÑÐµÐº")]
+        public float FractureConcussedDuration { get; set; } = 30f;
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» Ñ‚Ð¸ÐºÐ° Ñ‚Ñ€Ð°Ð²Ð¼, ÑÐµÐº")]
+        public float InjuryTickInterval { get; set; } = 1f;
+
+        [Description("Voffset ÑÑ‚Ñ€Ð¾ÐºÐ¸ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ñ (Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ð°) 1")]
+        public float MedicineHudVoffset { get; set; } = 61f;
+
+        [Description("Voffset ÑÑ‚Ñ€Ð¾ÐºÐ¸ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ñ (Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ð°) 2")]
+        public float MedicineHudVoffset2 { get; set; } = 60f;
+
+        [Description("Indent ÑÑ‚Ñ€Ð¾ÐºÐ¸ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ñ (Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ð°), %")]
+        public float MedicineHudIndent { get; set; } = -29.5f;
+
+        [Description("Ð¢ÐµÐºÑÑ‚ Ð¼ÐµÑ‚ÐºÐ¸ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ñ")]
+        public string MedicineHudLabel { get; set; } = "Ð¡Ð¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ";
+
+        // ===================== ÐÐ½Ñ‚Ð¸-ÐÐ´Ð¼Ð¸Ð½ (AntiAdm) =====================
+
+        [Description("Ð’ÐºÐ»ÑŽÑ‡ÐµÐ½Ð° Ð»Ð¸ ÑÐ¸ÑÑ‚ÐµÐ¼Ð° AntiAdm")]
+        public bool AntiAdmEnabled { get; set; } = true;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼Ð°Ð»ÑŒÐ½Ð¾Ðµ ÐºÐ¾Ð»-Ð²Ð¾ Dummy Ð½Ð° ÑÐµÑ€Ð²ÐµÑ€Ðµ")]
+        public int AntiAdmMaxDummies { get; set; } = 40;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼Ð°Ð»ÑŒÐ½Ñ‹Ð¹ changescale Ð´Ð»Ñ Dummy")]
+        public float AntiAdmDummyMaxScale { get; set; } = 25f;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼Ð°Ð»ÑŒÐ½Ñ‹Ð¹ changescale Ð´Ð»Ñ Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð²")]
+        public float AntiAdmMaxScale { get; set; } = 150f;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼Ð°Ð»ÑŒÐ½Ñ‹Ð¹ ccolor Ð´Ð»Ñ Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð² (ÐºÐ°Ð¶Ð´Ñ‹Ð¹ ÐºÐ°Ð½Ð°Ð»)")]
+        public float AntiAdmMaxColor { get; set; } = 5000f;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¿Ð°Ñ‚Ñ€Ð¾Ð½Ð¾Ð² Ð¾Ð´Ð½Ð¾Ð¼Ñƒ Ð¸Ð³Ñ€Ð¾ÐºÑƒ Ð·Ð° Ð¾Ð´Ð¸Ð½ Ð·Ð°Ð¿Ñ€Ð¾Ñ")]
+        public int AntiAdmMaxAmmo { get; set; } = 10000;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¿Ð°Ñ‚Ñ€Ð¾Ð½Ð¾Ð² Ñƒ Ð¾Ð´Ð½Ð¾Ð³Ð¾ Ð¸Ð³Ñ€Ð¾ÐºÐ° (ÑÑƒÐ¼Ð¼Ð°Ñ€Ð½Ð¾)")]
+        public int AntiAdmMaxTotalAmmo { get; set; } = 3500;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¾ÑÐ½Ð¾Ð²Ð½Ñ‹Ñ… Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð² Ð¸Ð½Ð²ÐµÐ½Ñ‚Ð°Ñ€Ðµ Ð¾Ð´Ð½Ð¾Ð³Ð¾ Ð¸Ð³Ñ€Ð¾ÐºÐ°")]
+        public int AntiAdmMaxInventoryItems { get; set; } = 60;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ñƒ Ð¾Ð´Ð½Ð¾Ð³Ð¾ Ð¸Ð³Ñ€Ð¾ÐºÐ°")]
+        public int AntiAdmMaxTotalItems { get; set; } = 150;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð², Ð²Ñ‹Ð´Ð°Ð²Ð°ÐµÐ¼Ñ‹Ñ… Ð°Ð´Ð¼Ð¸Ð½Ð¾Ð¼ Ð·Ð° 2 ÑÐµÐºÑƒÐ½Ð´Ñ‹")]
+        public int AntiAdmMaxItemsPerTwoMinutes { get; set; } = 200;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¿Ð°Ñ‚Ñ€Ð¾Ð½Ð¾Ð², Ð²Ñ‹Ð´Ð°Ð²Ð°ÐµÐ¼Ñ‹Ñ… Ð°Ð´Ð¼Ð¸Ð½Ð¾Ð¼ Ð·Ð° 5 ÑÐµÐºÑƒÐ½Ð´")]
+        public int AntiAdmMaxAmmoBurst { get; set; } = 2500;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð·Ð°Ð¿Ñ€Ð¾ÑÐ¾Ð² give/ga Ð¾Ñ‚ Ð°Ð´Ð¼Ð¸Ð½Ð° Ð·Ð° 5 ÑÐµÐºÑƒÐ½Ð´")]
+        public int AntiAdmMaxGiveRequestsBurst { get; set; } = 100;
+
+        [Description("SteamID, ÐºÐ¾Ñ‚Ð¾Ñ€Ð¾Ð¼Ñƒ Ñ€Ð°Ð·Ñ€ÐµÑˆÐµÐ½Ð° ÐºÐ¾Ð¼Ð°Ð½Ð´Ð° mp tg")]
+        public string AntiAdmMpTgAllowedSteamId { get; set; } = "76561199687703494@steam";
+
+        [Description("ÐšÐ” Ð½Ð° ÐºÐ¾Ð¼Ð°Ð½Ð´Ñƒ mp cr, ÑÐµÐº")]
+        public float AntiAdmMpCrCooldownSeconds { get; set; } = 5f;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ ÑÑ…ÐµÐ¼Ð°Ñ‚Ð¸ÐºÐ¾Ð² mp cr")]
+        public int AntiAdmMpCrMaxSchematics { get; set; } = 4;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð±Ð¾Ð»ÑŒÑˆÐ¸Ñ… ÑÑ…ÐµÐ¼Ð°Ñ‚Ð¸ÐºÐ¾Ð² mp cr")]
+        public int AntiAdmMpCrMaxLargeSchematics { get; set; } = 2;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ð½Ð¸Ð¹ mp load")]
+        public int AntiAdmMpLoadMaxUses { get; set; } = 2;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ forceclass Ð·Ð° ÑÐµÐºÑƒÐ½Ð´Ñƒ (Ð¼Ð°ÑÑÐ¾Ð²Ñ‹Ð¹ = 1 Ñ€Ð°Ð·)")]
+        public int AntiAdmMaxForceClassPerSecond { get; set; } = 3;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ ÑÐ¼ÐµÐ½ Ñ€Ð¾Ð»Ð¸ Dummy Ñ‡ÐµÑ€ÐµÐ· forceclass Ð·Ð° 3 ÑÐµÐºÑƒÐ½Ð´Ñ‹")]
+        public int AntiAdmMaxDummyForceClassPerMinute { get; set; } = 8;
+
+        [Description("ÐšÐ” Ð½Ð° Ð»ÑŽÐ±ÑƒÑŽ RA-ÐºÐ¾Ð¼Ð°Ð½Ð´Ñƒ, ÑÐµÐº")]
+        public float AntiAdmCommandCooldown { get; set; } = 0.1f;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ ÑÐ¿Ð°Ð²Ð½Ð¾Ð² Ð´Ð°Ð¼Ð¼Ð¸ Ð² Ð¼Ð¸Ð½ÑƒÑ‚Ñƒ (spawnâ†’killâ†’spawn Ð¾Ð±Ñ…Ð¾Ð´ AA-01)")]
+        public int AntiAdmMaxDummySpawnsPerMinute { get; set; } = 12;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð´Ð°Ð¼Ð¼Ð¸ (Ð½Ðµ Ð±Ð¾Ð»ÐµÐµ 3, Ð±ÐµÐ· Ð¿Ð°Ñ‚Ñ€Ð¾Ð½Ð¾Ð²/Ð³Ñ€Ð°Ð½Ð°Ñ‚/018/Ñ„Ð¾Ð½Ð°Ñ€Ð¸ÐºÐ¾Ð²)")]
+        public int AntiAdmMaxDummyItems { get; set; } = 3;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ ÑÐ¿ÐµÑ†Ð¸Ð°Ð»ÑŒÐ½Ñ‹Ñ… Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð¾Ð´Ð½Ð¾Ð¼Ñƒ Ð¸Ð³Ñ€Ð¾ÐºÑƒ (22,25,26,31,43,44,45,46)")]
+        public int AntiAdmMaxSpecialItems { get; set; } = 2;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¿Ð°Ñ‡ÐµÐº Ð¿Ð°Ñ‚Ñ€Ð¾Ð½Ð¾Ð² Ð¾Ð´Ð½Ð¾Ð¼Ñƒ Ð¸Ð³Ñ€Ð¾ÐºÑƒ (19,22,27,28,29)")]
+        public int AntiAdmMaxAmmoPacks { get; set; } = 15;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð²Ð·Ñ€Ñ‹Ð²Ð¾Ð² detonation_instant Ð·Ð° Ð¸Ð³Ñ€Ñƒ")]
+        public int AntiAdmMaxDetonationInstant { get; set; } = 2;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ AdminToy Ð½Ð° ÑÐµÑ€Ð²ÐµÑ€Ðµ")]
+        public int AntiAdmMaxAdminToys { get; set; } = 20;
+
+        [Description("Ð›Ð¸Ð¼Ð¸Ñ‚ ÑÐ¼ÐµÑ€Ñ‚ÐµÐ¹ Ð´Ð°Ð¼Ð¼Ð¸ Ð² Ð¼Ð¸Ð½ÑƒÑ‚Ñƒ Ð´Ð¾ Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸")]
+        public int AntiAdmDummyDeathLimitPerMinute { get; set; } = 30;
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸ Ð´Ð°Ð¼Ð¼Ð¸ Ð¿Ñ€Ð¸ ÑÐ¿Ð°Ð¼Ðµ ÑÐ¼ÐµÑ€Ñ‚ÐµÐ¹, ÑÐµÐº")]
+        public float AntiAdmDummyDeathBlockDuration { get; set; } = 60f;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð¾Ñ‡Ð¸ÑÑ‚ÐºÐ¸ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð¿Ñ€Ð¸ Ð²Ð·Ñ€Ñ‹Ð²Ðµ Ð³Ñ€Ð°Ð½Ð°Ñ‚Ñ‹, Ð¼")]
+        public float AntiAdmGrenadeItemCleanRadius { get; set; } = 10f;
+
+        [Description("ÐœÐ¸Ð½. ÐºÐ¾Ð»-Ð²Ð¾ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð´Ð»Ñ Ð¾Ñ‡Ð¸ÑÑ‚ÐºÐ¸ Ð¿Ñ€Ð¸ Ð²Ð·Ñ€Ñ‹Ð²Ðµ (ÐµÑÐ»Ð¸ Ð¼ÐµÐ½ÑŒÑˆÐµ â€” Ð½Ðµ Ñ‡Ð¸ÑÑ‚Ð¸Ñ‚ÑŒ)")]
+        public int AntiAdmGrenadeItemCleanThreshold { get; set; } = 20;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ¸ Ñ†ÐµÐ¿Ð½Ñ‹Ñ… Ð³Ñ€Ð°Ð½Ð°Ñ‚, Ð¼")]
+        public float AntiAdmGrenadeChainRadius { get; set; } = 15f;
+
+        [Description("ÐœÐ¸Ð½. ÐºÐ¾Ð»-Ð²Ð¾ Ð³Ñ€Ð°Ð½Ð°Ñ‚ Ð¿Ð¾Ð±Ð»Ð¸Ð·Ð¾ÑÑ‚Ð¸ Ð´Ð»Ñ Ð±Ð»Ð¾ÐºÐ¸Ñ€Ð¾Ð²ÐºÐ¸ Ð´ÐµÑ‚Ð¾Ð½Ð°Ñ†Ð¸Ð¸")]
+        public int AntiAdmGrenadeChainThreshold { get; set; } = 3;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ¸ Ð¿Ð»Ð¾Ñ‚Ð½Ð¾ÑÑ‚Ð¸ Ð³Ñ€Ð°Ð½Ð°Ñ‚, Ð¼")]
+        public float AntiAdmGrenadeDensityRadius { get; set; } = 20f;
+
+        [Description("ÐŸÐ¾Ñ€Ð¾Ð³ Ð³Ñ€Ð°Ð½Ð°Ñ‚ Ð² Ñ€Ð°Ð´Ð¸ÑƒÑÐµ Ð´Ð»Ñ ÑÑ€Ð°Ð±Ð°Ñ‚Ñ‹Ð²Ð°Ð½Ð¸Ñ Ð¾Ñ‡Ð¸ÑÑ‚ÐºÐ¸")]
+        public int AntiAdmGrenadeDensityMax { get; set; } = 30;
+
+        [Description("Ð¡ÐºÐ¾Ð»ÑŒÐºÐ¾ Ð³Ñ€Ð°Ð½Ð°Ñ‚ Ð¾ÑÑ‚Ð°Ð²Ð»ÑÑ‚ÑŒ Ð¿Ð¾ÑÐ»Ðµ Ð¾Ñ‡Ð¸ÑÑ‚ÐºÐ¸ (Ð»Ð¸Ð¼Ð¸Ñ‚)")]
+        public int AntiAdmGrenadeDensityLimit { get; set; } = 20;
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» ÑÐºÐ°Ð½Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ñ Ð¿Ð»Ð¾Ñ‚Ð½Ð¾ÑÑ‚Ð¸ Ð³Ñ€Ð°Ð½Ð°Ñ‚, ÑÐµÐº")]
+        public float AntiAdmGrenadeDensityInterval { get; set; } = 3f;
+
+        // ===================== ÐÐ½Ñ‚Ð¸-Ð›Ð°Ð³ (AntiLag) =====================
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» ÑÐºÐ°Ð½Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ñ Ñ€Ð°Ð³Ð´Ð¾Ð»Ð»Ð¾Ð² Ð¸ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð², ÑÐµÐº")]
+        public float AntiLagScanInterval { get; set; } = 3f;
+
+        // â”€â”€ Ð Ð°Ð³Ð´Ð¾Ð»Ð»Ñ‹ (Ñ‚Ñ€ÑƒÐ¿Ñ‹) â”€â”€
+        [Description("ÐœÐ°ÐºÑ. Ñ€Ð°Ð³Ð´Ð¾Ð»Ð»Ð¾Ð² Ð² Ð±Ð»Ð¸Ð¶Ð½ÐµÐ¼ Ñ€Ð°Ð´Ð¸ÑƒÑÐµ (ÑƒÐ´Ð°Ð»ÑÐµÐ¼ ÑÐ°Ð¼Ñ‹Ðµ ÑÑ‚Ð°Ñ€Ñ‹Ðµ)")]
+        public int AntiLagRagdollCloseMax { get; set; } = 9;
+
+        [Description("Ð‘Ð»Ð¸Ð¶Ð½Ð¸Ð¹ Ñ€Ð°Ð´Ð¸ÑƒÑ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ¸ Ñ€Ð°Ð³Ð´Ð¾Ð»Ð»Ð¾Ð², Ð¼")]
+        public float AntiLagRagdollCloseRadius { get; set; } = 10f;
+
+        [Description("ÐœÐ°ÐºÑ. Ñ€Ð°Ð³Ð´Ð¾Ð»Ð»Ð¾Ð² Ð² Ð´Ð°Ð»ÑŒÐ½ÐµÐ¼ Ñ€Ð°Ð´Ð¸ÑƒÑÐµ (ÑƒÐ´Ð°Ð»ÑÐµÐ¼ ÑÐ°Ð¼Ñ‹Ðµ ÑÑ‚Ð°Ñ€Ñ‹Ðµ)")]
+        public int AntiLagRagdollFarMax { get; set; } = 20;
+
+        [Description("Ð”Ð°Ð»ÑŒÐ½Ð¸Ð¹ Ñ€Ð°Ð´Ð¸ÑƒÑ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ¸ Ñ€Ð°Ð³Ð´Ð¾Ð»Ð»Ð¾Ð², Ð¼")]
+        public float AntiLagRagdollFarRadius { get; set; } = 100f;
+
+        // â”€â”€ ÐŸÑ€ÐµÐ´Ð¼ÐµÑ‚Ñ‹ (Ð²Ñ‹Ð±Ñ€Ð¾ÑˆÐµÐ½Ð½Ñ‹Ðµ) â”€â”€
+        [Description("ÐœÐ°ÐºÑ. Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð² Ñ€Ð°Ð´Ð¸ÑƒÑÐµ (ÑƒÐ´Ð°Ð»ÑÐµÐ¼ ÑÐ»ÑƒÑ‡Ð°Ð¹Ð½Ð¾)")]
+        public int AntiLagPickupMax { get; set; } = 120;
+
+        [Description("ÐœÐ°ÐºÑ. Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð² Ñ€Ð°Ð´Ð¸ÑƒÑÐµ 2 Ð¼ÐµÑ‚Ñ€Ð¾Ð²")]
+        public int AntiLagPickupCloseMax { get; set; } = 40;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ¸ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð², Ð¼")]
+        public float AntiLagPickupRadius { get; set; } = 10f;
+
+        [Description("Ð¡ÐºÐ¾Ð»ÑŒÐºÐ¾ ÑÐµÐºÑƒÐ½Ð´ Ð¾Ñ‚ÐºÐ»ÑŽÑ‡Ð°Ñ‚ÑŒ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÑƒ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð¿Ñ€Ð¸ map editor spawn")]
+        public float AntiLagMapEditorDisableSeconds { get; set; } = 5f;
+
+        // â”€â”€ SCP-018 Ð¼ÑÑ‡Ð¸ÐºÐ¸ â”€â”€
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¼ÑÑ‡Ð¸ÐºÐ¾Ð² SCP-018 Ð½Ð° Ð²ÑÐµÐ¹ ÐºÐ°Ñ€Ñ‚Ðµ")]
+        public int AntiLagMaxBallsGlobal { get; set; } = 7;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¼ÑÑ‡Ð¸ÐºÐ¾Ð² SCP-018 Ð² Ñ€Ð°Ð´Ð¸ÑƒÑÐµ (AntiLagBallRadius)")]
+        public int AntiLagMaxBallsPerRadius { get; set; } = 2;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ¸ Ð¼ÑÑ‡Ð¸ÐºÐ¾Ð² SCP-018, Ð¼")]
+        public float AntiLagBallRadius { get; set; } = 30f;
+
+        // ===================== TPS-Ð¾Ð¿Ñ‚Ð¸Ð¼Ð¸Ð·Ð°Ñ†Ð¸Ñ =====================
+
+        [Description("TPS Ð¿Ð¾Ñ€Ð¾Ð³ Ð´Ð»Ñ ÑƒÑ€Ð¾Ð²Ð½Ñ 1 Ð¾Ð¿Ñ‚Ð¸Ð¼Ð¸Ð·Ð°Ñ†Ð¸Ð¸")]
+        public float TpsLevel1Threshold { get; set; } = 50f;
+
+        [Description("TPS Ð¿Ð¾Ñ€Ð¾Ð³ Ð´Ð»Ñ ÑƒÑ€Ð¾Ð²Ð½Ñ 2 Ð¾Ð¿Ñ‚Ð¸Ð¼Ð¸Ð·Ð°Ñ†Ð¸Ð¸")]
+        public float TpsLevel2Threshold { get; set; } = 20f;
+
+        [Description("TPS Ð¿Ð¾Ñ€Ð¾Ð³ Ð´Ð»Ñ ÑƒÑ€Ð¾Ð²Ð½Ñ 3 (Ð¿Ð»Ð¾Ñ‚Ð½Ñ‹Ð¹ Ñ€ÐµÑÑ‚Ð°Ñ€Ñ‚)")]
+        public float TpsLevel3Threshold { get; set; } = 10f;
+
+        [Description("HUD Ð¸Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» Ð¿Ñ€Ð¸ TPS-Ð¾Ð¿Ñ‚Ð¸Ð¼Ð¸Ð·Ð°Ñ†Ð¸Ð¸ ÑƒÑ€Ð¾Ð²Ð½Ñ 1, ÑÐµÐº")]
+        public float TpsOptimizedHudInterval { get; set; } = 0.3f;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð¾Ñ‚Ð¾Ð±Ñ€Ð°Ð¶ÐµÐ½Ð¸Ñ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð½Ð° ÑƒÑ€Ð¾Ð²Ð½Ðµ 1, Ð¼")]
+        public float TpsLevel1ItemRadius { get; set; } = 40f;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð¾Ñ‚Ð¾Ð±Ñ€Ð°Ð¶ÐµÐ½Ð¸Ñ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð½Ð° ÑƒÑ€Ð¾Ð²Ð½Ðµ 2, Ð¼")]
+        public float TpsLevel2ItemRadius { get; set; } = 10f;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð² Ð² ÐºÐ»Ð°ÑÑ‚ÐµÑ€Ðµ 20Ð¼ Ð´Ð»Ñ Ð¾Ñ‡Ð¸ÑÑ‚ÐºÐ¸")]
+        public int TpsClusterCleanupThreshold { get; set; } = 70;
+
+        [Description("Ð Ð°Ð´Ð¸ÑƒÑ Ð¿Ñ€Ð¾Ð²ÐµÑ€ÐºÐ¸ ÐºÐ»Ð°ÑÑ‚ÐµÑ€Ð° Ð¿Ñ€ÐµÐ´Ð¼ÐµÑ‚Ð¾Ð², Ð¼")]
+        public float TpsClusterRadius { get; set; } = 20f;
+
+        [Description("ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ scp-330 Ð¼ÑÑ‡Ð¸ÐºÐ¾Ð² Ð´Ð¾ Ð¾Ñ‡Ð¸ÑÑ‚ÐºÐ¸")]
+        public int TpsMaxCandiesBeforeCleanup { get; set; } = 2;
+
+        [Description("Ð—Ð°Ð´ÐµÑ€Ð¶ÐºÐ° Ð¿ÐµÑ€ÐµÐ´ Ð¿Ð»Ð¾Ñ‚Ð½Ñ‹Ð¼ Ñ€ÐµÑÑ‚Ð°Ñ€Ñ‚Ð¾Ð¼, ÑÐµÐº")]
+        public float TpsDenseRestartDelaySeconds { get; set; } = 15f;
+
+        // ===================== ÐÐ½Ñ‚Ð¸-DDoS (L7 join-Ñ„Ð»ÑƒÐ´) =====================
+        // Ð’ÐÐ–ÐÐž: ÑÑ‚Ð¾ Ð·Ð°Ñ‰Ð¸Ñ‚Ð° ÑƒÑ€Ð¾Ð²Ð½Ñ Ð¿Ñ€Ð¸Ð»Ð¾Ð¶ÐµÐ½Ð¸Ñ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð¾Ñ‚ Ñ„Ð»ÑƒÐ´Ð° Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹.
+        // ÐžÑ‚ Ð¾Ð±ÑŠÑ‘Ð¼Ð½Ð¾Ð³Ð¾ DDoS Ð·Ð°Ñ‰Ð¸Ñ‰Ð°ÐµÑ‚ Ð¢ÐžÐ›Ð¬ÐšÐž Ñ…Ð¾ÑÑ‚/ÑÐµÑ‚ÑŒ (GRE-Ñ‚ÑƒÐ½Ð½ÐµÐ»ÑŒ, scrubbing).
+
+        [Description("Ð’ÐºÐ»ÑŽÑ‡ÐµÐ½Ð° Ð»Ð¸ ÑÐ¸ÑÑ‚ÐµÐ¼Ð° AntiDdos")]
+        public bool AntiDdosEnabled { get; set; } = true;
+
+        [Description("IP, ÐºÐ¾Ñ‚Ð¾Ñ€Ñ‹Ðµ Ð½Ð¸ÐºÐ¾Ð³Ð´Ð° Ð½Ðµ Ð±Ð»Ð¾ÐºÐ¸Ñ€ÑƒÑŽÑ‚ÑÑ (ÑÑ‚Ð°Ñ„Ñ„/Ð´Ð¾Ð²ÐµÑ€ÐµÐ½Ð½Ñ‹Ðµ)")]
+        public System.Collections.Generic.List<string> AntiDdosWhitelistIps { get; set; } =
+            new System.Collections.Generic.List<string> { "127.0.0.1" };
+
+        [Description("Discord webhook Ð´Ð»Ñ Ð¾Ð¿Ð¾Ð²ÐµÑ‰ÐµÐ½Ð¸Ð¹ Ð¾ ÑÐ»Ð¾ÑÑ… Ð°Ñ‚Ð°ÐºÐ¸ (Ð¿ÑƒÑÑ‚Ð¾ = Ð²Ñ‹ÐºÐ»)")]
+        public string AntiDdosWebhookUrl { get; set; } = "";
+
+        [Description("Ð˜Ð½Ñ‚ÐµÑ€Ð²Ð°Ð» Ð¼Ð¾Ð½Ð¸Ñ‚Ð¾Ñ€Ð¸Ð½Ð³Ð°, ÑÐµÐº")]
+        public float AntiDdosMonitorInterval { get; set; } = 1f;
+
+        // â”€â”€ ÐŸÐ¾Ñ€Ð¾Ð³Ð¸ Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹ Ð² ÑÐµÐºÑƒÐ½Ð´Ñƒ Ð´Ð»Ñ ÑÐ»Ð¾Ñ‘Ð² â”€â”€
+        // Ð’ÐÐ–ÐÐž: Ð¿Ð¾Ñ€Ð¾Ð³Ð¸ Ð´Ð¾Ð»Ð¶Ð½Ñ‹ Ð±Ñ‹Ñ‚ÑŒ Ð²Ñ‹ÑˆÐµ Ð½Ð¾Ñ€Ð¼Ð°Ð»ÑŒÐ½Ð¾Ð³Ð¾ Ð¿Ð¸ÐºÐ° Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹.
+        // 8-20 conn/sec â€” ÑÑ‚Ð¾ ÐÐžÐ ÐœÐ Ð´Ð»Ñ Ð·Ð°Ð¿ÑƒÑÐºÐ° ÐºÐ°Ñ€Ñ‚Ñ‹ (Ð²ÑÐµ Ð·Ð°Ñ…Ð¾Ð´ÑÑ‚ Ð¾Ð´Ð½Ð¾Ð²Ñ€ÐµÐ¼ÐµÐ½Ð½Ð¾).
+        // Ð›Ð¾Ð¶Ð½Ñ‹Ðµ ÑÑ€Ð°Ð±Ð°Ñ‚Ñ‹Ð²Ð°Ð½Ð¸Ñ = ÑÐµÑ€Ð²ÐµÑ€ Ð±Ð»Ð¾ÐºÐ¸Ñ€ÑƒÐµÑ‚ Ð»ÐµÐ³Ð¸Ñ‚Ð¸Ð¼Ð½Ñ‹Ñ… Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð².
+        [Description("Ð¡Ð»Ð¾Ð¹ 1 (Ð»Ñ‘Ð³ÐºÐ¸Ð¹): Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹/ÑÐµÐº (Ð½Ð¾Ñ€Ð¼Ð° = 8-15 Ð¿Ñ€Ð¸ ÑÑ‚Ð°Ñ€Ñ‚Ðµ ÐºÐ°Ñ€Ñ‚Ñ‹)")]
+        public int AntiDdosLayer1ConnPerSec { get; set; } = 25;
+
+        [Description("Ð¡Ð»Ð¾Ð¹ 2 (ÑÐ¸Ð»ÑŒÐ½Ñ‹Ð¹): Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹/ÑÐµÐº")]
+        public int AntiDdosLayer2ConnPerSec { get; set; } = 50;
+
+        [Description("Ð¡Ð»Ð¾Ð¹ 3 (Ð½Ðµ ÑÐ¿Ñ€Ð°Ð²Ð»ÑÐµÑ‚ÑÑ): Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹/ÑÐµÐº")]
+        public int AntiDdosLayer3ConnPerSec { get; set; } = 100;
+
+        [Description("Ð¡Ð»Ð¾Ð¹ 4 (lockdown): Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹/ÑÐµÐº")]
+        public int AntiDdosLayer4ConnPerSec { get; set; } = 200;
+
+        // â”€â”€ ÐŸÐ¾Ñ€Ð¾Ð³Ð¸ TPS (ÑÐµÑ€Ð²ÐµÑ€ Ð·Ð°Ð´Ñ‹Ñ…Ð°ÐµÑ‚ÑÑ) â”€â”€
+        // Ð’ÐÐ–ÐÐž: TPS Ð¼Ð¾Ð¶ÐµÑ‚ Ð¿Ð°Ð´Ð°Ñ‚ÑŒ Ð¸Ð·-Ð·Ð° Ñ‚ÑÐ¶Ñ‘Ð»Ñ‹Ñ… Ð¸Ð²ÐµÐ½Ñ‚Ð¾Ð², Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ñ‹, Ð³Ñ€Ð°Ð½Ð°Ñ‚ â€”
+        // ÑÑ‚Ð¾ ÐÐ• DDoS. ÐŸÐ¾Ñ€Ð¾Ð³Ð¸ Ð´Ð¾Ð»Ð¶Ð½Ñ‹ Ð±Ñ‹Ñ‚ÑŒ Ð¾Ñ‡ÐµÐ½ÑŒ Ð½Ð¸Ð·ÐºÐ¸Ð¼Ð¸.
+        [Description("Ð¡Ð»Ð¾Ð¹ 3 Ð¿Ñ€Ð¸ SmoothTps Ð½Ð¸Ð¶Ðµ ÑÑ‚Ð¾Ð³Ð¾ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ (Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð¿Ñ€Ð¸ Ñ„Ð»ÑƒÐ´Ðµ Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹)")]
+        public double AntiDdosLayer3TpsThreshold { get; set; } = 3.0;
+
+        [Description("Ð¡Ð»Ð¾Ð¹ 4 Ð¿Ñ€Ð¸ SmoothTps Ð½Ð¸Ð¶Ðµ ÑÑ‚Ð¾Ð³Ð¾ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ (Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð¿Ñ€Ð¸ Ñ„Ð»ÑƒÐ´Ðµ Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹)")]
+        public double AntiDdosLayer4TpsThreshold { get; set; } = 1.0;
+
+        // â”€â”€ ÐŸÐµÑ€-IP Ð»Ð¸Ð¼Ð¸Ñ‚Ñ‹ â”€â”€
+        [Description("ÐœÐ°ÐºÑ. Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹ Ñ Ð¾Ð´Ð½Ð¾Ð³Ð¾ IP Ð·Ð° Ð¾ÐºÐ½Ð¾ (ÑÐµÐº)")]
+        public int AntiDdosMaxConnPerIp { get; set; } = 5;
+
+        [Description("ÐžÐºÐ½Ð¾ Ð¿Ð¾Ð´ÑÑ‡Ñ‘Ñ‚Ð° Ð¿Ð¾Ð´ÐºÐ»ÑŽÑ‡ÐµÐ½Ð¸Ð¹ Ñ Ð¾Ð´Ð½Ð¾Ð³Ð¾ IP, ÑÐµÐº")]
+        public float AntiDdosPerIpWindowSeconds { get; set; } = 60f;
+
+        [Description("Ð”Ð»Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ÑÑ‚ÑŒ Ð²Ñ€ÐµÐ¼ÐµÐ½Ð½Ð¾Ð³Ð¾ Ð±Ð°Ð½Ð° IP, ÑÐµÐº")]
+        public float AntiDdosIpTempBanSeconds { get; set; } = 300f;
+
+        // â”€â”€ Ð“Ð¸ÑÑ‚ÐµÑ€ÐµÐ·Ð¸Ñ â”€â”€
+        [Description("Ð¡ÐºÐ¾Ð»ÑŒÐºÐ¾ ÑÐµÐºÑƒÐ½Ð´ Ð¼ÐµÑ‚Ñ€Ð¸ÐºÐ¸ Ð´Ð¾Ð»Ð¶Ð½Ñ‹ Ð±Ñ‹Ñ‚ÑŒ ÑÐ¿Ð¾ÐºÐ¾Ð¹Ð½Ñ‹ Ð´Ð»Ñ Ð¿Ð¾Ð½Ð¸Ð¶ÐµÐ½Ð¸Ñ ÑÐ»Ð¾Ñ")]
+        public float AntiDdosDeescalateSeconds { get; set; } = 60f;
+
+        [Description("ÐÐ° Ð¡Ð»Ð¾Ðµ 3+ Ñ€Ð°Ð·Ñ€ÐµÑˆÐ°Ñ‚ÑŒ Ð²Ñ…Ð¾Ð´ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð¸Ð·Ð²ÐµÑÑ‚Ð½Ñ‹Ð¼ (Ð½ÐµÐ´Ð°Ð²Ð½Ð¾ Ð¸Ð³Ñ€Ð°Ð²ÑˆÐ¸Ð¼) Ð¸Ð³Ñ€Ð¾ÐºÐ°Ð¼")]
+        public bool AntiDdosLayer3KnownOnly { get; set; } = true;
+    }
+}
+using System;
+using EventHUD.Enums;
+
+namespace EventHUD.Models
+{
+    public class EventSession
+    {
+        public EventState State { get; set; } = EventState.None;
+
+        public string  EventName    { get; set; }
+        public RPType  RpType       { get; set; }
+        public string  HostUserId   { get; set; }
+        public string  HostNickname { get; set; }
+        public bool    HostIsOnline { get; set; } = true;
+
+        public DateTime StartedAt  { get; set; }
+        public DateTime StoppedAt  { get; set; }
+
+        public DateTime HostReturnedAt          { get; set; }
+        public bool     ShowHostReturnHighlight  { get; set; }
+
+        public TimeSpan Elapsed =>
+            StartedAt == default ? TimeSpan.Zero : DateTime.UtcNow - StartedAt;
+
+        public void Reset()
+        {
+            State                   = EventState.None;
+            EventName               = null;
+            HostUserId              = null;
+            HostNickname            = null;
+            HostIsOnline            = true;
+            StartedAt               = default;
+            StoppedAt               = default;
+            HostReturnedAt          = default;
+            ShowHostReturnHighlight = false;
+        }
+    }
+}
+ 
+namespace EventHUD.Enums
+{
+    public enum EventState
+    {
+        None,
+        Preparing,
+        Starting,
+        Running,
+        Stopping
+    }
+}
+ 
+namespace EventHUD.Enums
+{
+    public enum RPType
+    {
+        NONRP,
+        LIGHTRP,
+        FUNRP,
+        MEDIUMRP,
+        HARDRP,
+        FULLRP
+    }
+}
+ 
+namespace EventHUD.Rpm
+{
+    public enum RpModuleType
+    {
+        Radio,
+        Medicine
+    }
+}
+using System;
+using System.Collections.Generic;
+using EventHUD.Enums;
+
+namespace EventHUD.Rpm
+{
+    public class RpModuleManager
+    {
+        public static RpModuleManager Instance { get; } = new RpModuleManager();
+
+        private readonly Dictionary<RpModuleType, bool> _states = new();
+
+        private RpModuleManager()
+        {
+            foreach (RpModuleType type in Enum.GetValues(typeof(RpModuleType)))
+                _states[type] = false;
+        }
+
+        public bool IsEnabled(RpModuleType type) =>
+            _states.TryGetValue(type, out var v) && v;
+
+        public void SetEnabled(RpModuleType type, bool enabled) =>
+            _states[type] = enabled;
+
+        public void SetAll(bool enabled)
+        {
+            foreach (var key in new List<RpModuleType>(_states.Keys))
+                _states[key] = enabled;
+        }
+
+        /// <summary>
+        /// Ð’Ñ‹Ð·Ñ‹Ð²Ð°ÐµÑ‚ÑÑ Ð¿Ñ€Ð¸ ev prepare/start.
+        /// NRP â€” Ð²ÑÐµ Ð¼Ð¾Ð´ÑƒÐ»Ð¸ OFF. Ð›ÑŽÐ±Ð¾Ð¹ RP â€” Ð²ÑÐµ Ð¼Ð¾Ð´ÑƒÐ»Ð¸ ON.
+        /// </summary>
+        public void OnEventRpChanged(RPType rpType) =>
+            SetAll(rpType != RPType.NONRP);
+
+        /// <summary>
+        /// Ð’Ñ‹Ð·Ñ‹Ð²Ð°ÐµÑ‚ÑÑ Ð¿Ñ€Ð¸ ev stop.
+        /// ÐœÐ¾Ð´ÑƒÐ»Ð¸ Ð¾ÑÑ‚Ð°ÑŽÑ‚ÑÑ Ð² Ñ‚ÐµÐºÑƒÑ‰ÐµÐ¼ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ð¸.
+        /// </summary>
+        public void OnEventStopped(RPType lastRpType) { }
+    }
+}
+ 
+namespace EventHUD.Radio
+{
+    public enum RadioTeam
+    {
+        Unknown,   // "?" â€” Ð´ÐµÑ„Ð¾Ð»Ñ‚ (Ð”-ÐºÐ»Ð°ÑÑ, ÑÐ»ÑƒÑ‡Ð°Ð¹Ð½Ñ‹Ðµ Ñ€Ð°Ñ†Ð¸Ð¸ Ð½Ð° Ð¿Ð¾Ð»Ñƒ)
+        Facility,  // ÐšÐ¾Ð¼Ð¿Ð»ÐµÐºÑ Ð¾Ð±Ñ‰Ð°Ñ
+        Security,  // Ð¡Ð‘
+        Mtf,       // ÐœÐžÐ“
+        Chaos,     // ÐŸÐ¥
+        Custom     // ÑÐ²Ð¾Ð±Ð¾Ð´Ð½Ð°Ñ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ð° (10â€“390), Ð·Ð°Ð´Ð°Ñ‘Ñ‚ÑÑ Ñ‡ÐµÑ€ÐµÐ· SSS
+    }
+}
+ 
+namespace EventHUD.Radio
+{
+    public static class RadioTeamExtensions
+    {
+        public static string GetDisplayName(this RadioTeam team) => team switch
+        {
+            RadioTeam.Unknown  => "?",
+            RadioTeam.Facility => "ÐšÐ¾Ð¼Ð¿Ð»ÐµÐºÑ",
+            RadioTeam.Security => "Ð¡Ð‘",
+            RadioTeam.Mtf      => "ÐœÐžÐ“",
+            RadioTeam.Chaos    => "ÐŸÐ¥",
+            RadioTeam.Custom   => "Ð¡Ð²Ð¾Ð±Ð¾Ð´Ð½Ð°Ñ",
+            _                  => "?"
+        };
+
+        public static string GetColor(this RadioTeam team) => team switch
+        {
+            RadioTeam.Unknown  => "#FF5757",
+            RadioTeam.Facility => "#FFFF7C",
+            RadioTeam.Security => "#5B6370",
+            RadioTeam.Mtf      => "#0096FF",
+            RadioTeam.Chaos    => "#026100",
+            RadioTeam.Custom   => "#FFFFFF",
+            _                  => "#FFFFFF"
+        };
+
+        public static float GetFrequency(this RadioTeam team, Config c) => team switch
+        {
+            RadioTeam.Unknown  => c.RadioFreqUnknown,
+            RadioTeam.Facility => c.RadioFreqFacility,
+            RadioTeam.Security => c.RadioFreqSecurity,
+            RadioTeam.Mtf      => c.RadioFreqMtf,
+            RadioTeam.Chaos    => c.RadioFreqChaos,
+            _                  => c.RadioFreqUnknown
+        };
+    }
+}
+ 
+using System.Collections.Generic;
+
+namespace EventHUD.Radio
+{
+    /// <summary>
+    /// Ð¥Ñ€Ð°Ð½Ð¸Ñ‚ Ð¿ÐµÑ€ÑÐ¾Ð½Ð°Ð»ÑŒÐ½ÑƒÑŽ ÑÐ²Ð¾Ð±Ð¾Ð´Ð½ÑƒÑŽ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ñƒ ÐºÐ°Ð¶Ð´Ð¾Ð³Ð¾ Ð¸Ð³Ñ€Ð¾ÐºÐ° (Ð¸Ð· SSS).
+    /// ÐšÐ»ÑŽÑ‡ â€” UserId.
+    /// </summary>
+    public static class RadioCustomFrequencyStorage
+    {
+        private static readonly Dictionary<string, float> _saved = new();
+
+        /// <summary>
+        /// Ð’Ð¾Ð·Ð²Ñ€Ð°Ñ‰Ð°ÐµÑ‚ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ñƒ, ÐµÑÐ»Ð¸ Ð¾Ð½Ð° Ð·Ð°Ð´Ð°Ð½Ð° Ð¸ Ð±Ð¾Ð»ÑŒÑˆÐµ 0.
+        /// null â€” ÐµÑÐ»Ð¸ Ð½Ðµ Ð·Ð°Ð´Ð°Ð½Ð° Ð¸Ð»Ð¸ Ð±Ñ‹Ð»Ð° ÑÐ±Ñ€Ð¾ÑˆÐµÐ½Ð°.
+        /// </summary>
+        public static float? Get(string userId)
+        {
+            if (!_saved.TryGetValue(userId, out var freq))
+                return null;
+
+            // 0 == ÑÐ±Ñ€Ð¾ÑˆÐµÐ½Ð¾ (Ð¸Ð³Ñ€Ð¾Ðº Ð¿Ð¾ÑÑ‚Ð°Ð²Ð¸Ð» ÑÐ»Ð°Ð¹Ð´ÐµÑ€ Ð² 0)
+            return freq > 0f ? freq : (float?)null;
+        }
+
+        public static void Set(string userId, float frequency) =>
+            _saved[userId] = frequency;
+
+        /// <summary>Ð¯Ð²Ð½Ð¾ ÑƒÐ´Ð°Ð»ÑÐµÑ‚ Ð·Ð°Ð¿Ð¸ÑÑŒ â€” Ñ€Ð°Ð²Ð½Ð¾Ð·Ð½Ð°Ñ‡Ð½Ð¾ Set(userId, 0).</summary>
+        public static void Remove(string userId) =>
+            _saved.Remove(userId);
+
+        /// <summary>Ð’Ñ‹Ð·Ñ‹Ð²Ð°Ñ‚ÑŒ Ð¿Ñ€Ð¸ ÑÑ‚Ð°Ñ€Ñ‚Ðµ Ð½Ð¾Ð²Ð¾Ð³Ð¾ Ñ€Ð°ÑƒÐ½Ð´Ð°.</summary>
+        public static void ClearAll() => _saved.Clear();
+    }
+}
+ 
+using System;
+using System.Text.RegularExpressions;
+
+namespace EventHUD.Extensions
+{
+    public static class RichTextExtensions
+    {
+        private static readonly Regex TagRegex =
+            new Regex("<.*?>", RegexOptions.Compiled);
+
+        public static string StripTags(this string input) =>
+            string.IsNullOrEmpty(input) ? string.Empty : TagRegex.Replace(input, string.Empty);
+
+        public static int VisibleLength(this string input) =>
+            input.StripTags().Length;
+
+        public static (int r, int g, int b) HexToRgb(this string hex)
+        {
+            hex = hex.TrimStart('#');
+            return (
+                Convert.ToInt32(hex.Substring(0, 2), 16),
+                Convert.ToInt32(hex.Substring(2, 2), 16),
+                Convert.ToInt32(hex.Substring(4, 2), 16)
+            );
+        }
+    }
+}
+ 
+using EventHUD.Enums;
+
+namespace EventHUD.Extensions
+{
+    public static class RPTypeExtensions
+    {
+        public static string GetColor(this RPType type) => type switch
+        {
+            RPType.NONRP    => "#00FF00",
+            RPType.LIGHTRP  => "#90D5FF",
+            RPType.FUNRP    => "#FFFFFF",
+            RPType.MEDIUMRP => "#FFFF00",
+            RPType.HARDRP   => "#FF0000",
+            RPType.FULLRP   => "#950606",
+            _               => "#FFFFFF"
+        };
+
+        public static string GetShortName(this RPType type) => type switch
+        {
+            RPType.NONRP    => "NRP",
+            RPType.LIGHTRP  => "LRP",
+            RPType.FUNRP    => "FUNRP",
+            RPType.MEDIUMRP => "MRP",
+            RPType.HARDRP   => "HRP",
+            RPType.FULLRP   => "FRP",
+            _               => type.ToString()
+        };
+
+        /// <summary>
+        /// ÐœÐ½Ð¾Ð¶Ð¸Ñ‚ÐµÐ»ÑŒ Ð²Ñ€ÐµÐ¼ÐµÐ½Ð¸ Ð»ÐµÑ‡ÐµÐ½Ð¸Ñ/Ð¾ÑÐ¼Ð¾Ñ‚Ñ€Ð° Ð² Ð·Ð°Ð²Ð¸ÑÐ¸Ð¼Ð¾ÑÑ‚Ð¸ Ð¾Ñ‚ RP-ÑƒÑ€Ð¾Ð²Ð½Ñ.
+        /// LRP/FUNRP/NONRP = 0.5x (Ð² 2 Ñ€Ð°Ð·Ð° Ð±Ñ‹ÑÑ‚Ñ€ÐµÐµ)
+        /// MRP = 0.66x (Ð² 1.5 Ñ€Ð°Ð·Ð° Ð±Ñ‹ÑÑ‚Ñ€ÐµÐµ)
+        /// HRP/FRP = 1.0x
+        /// </summary>
+        public static float GetTimeMultiplier(this RPType type) => type switch
+        {
+            RPType.LIGHTRP  => 0.5f,
+            RPType.FUNRP    => 0.5f,
+            RPType.NONRP    => 0.5f,
+            RPType.MEDIUMRP => 0.66f,
+            RPType.HARDRP   => 1.0f,
+            RPType.FULLRP   => 1.0f,
+            _               => 1.0f
+        };
+
+        /// <summary>Ð›Ñ‘Ð³ÐºÐ¸Ð¹ Ð ÐŸ â€” Ð¼ÐµÐ½ÐµÐµ ÑÐµÑ€ÑŒÑ‘Ð·Ð½Ñ‹Ðµ Ð¿Ð¾ÑÐ»ÐµÐ´ÑÑ‚Ð²Ð¸Ñ (NONRP/LIGHTRP/FUNRP).</summary>
+        public static bool IsLightRp(this RPType type) =>
+            type == RPType.NONRP || type == RPType.LIGHTRP || type == RPType.FUNRP;
+
+        /// <summary>
+        /// Ð‘Ð¾Ð½ÑƒÑ Ðº Ð·Ð°Ñ‰Ð¸Ñ‚Ðµ Ð±Ñ€Ð¾Ð½Ð¸ (Ð´Ð¾Ð»Ñ) Ð½Ð° Ð»Ñ‘Ð³ÐºÐ¸Ñ… Ð ÐŸ â€” Ð±Ñ€Ð¾Ð½Ñ ÑÐ¿Ð°ÑÐ°ÐµÑ‚ ÑÐ¸Ð»ÑŒÐ½ÐµÐµ.
+        /// </summary>
+        public static float GetArmorReductionBonus(this RPType type) => type switch
+        {
+            RPType.NONRP    => 0.20f,
+            RPType.LIGHTRP  => 0.15f,
+            RPType.FUNRP    => 0.15f,
+            RPType.MEDIUMRP => 0.08f,
+            RPType.HARDRP   => 0f,
+            RPType.FULLRP   => 0f,
+            _               => 0f
+        };
+
+        /// <summary>
+        /// Ð Ð°Ð·Ñ€ÐµÑˆÐ°ÐµÑ‚ Ð»Ð¸ Ð ÐŸ Ð²Ñ‹Ð¶Ð¸Ñ‚ÑŒ Ð¿Ñ€Ð¸ Ñ…ÐµÐ´ÑˆÐ¾Ñ‚Ðµ Ð² Ð±Ð¾ÐµÐ²Ð¾Ð¼ Ð±Ñ€Ð¾Ð½Ð¸ÐºÐµ.
+        /// ÐÐ° ÑÐµÑ€ÑŒÑ‘Ð·Ð½Ñ‹Ñ… Ð ÐŸ (HARD/FULL) Ð±Ð¾ÐµÐ²Ð¾Ð¹ ÑˆÐ»ÐµÐ¼ Ð½Ðµ ÑÐ¿Ð°ÑÐ°ÐµÑ‚ Ð¾Ñ‚ Ñ…ÐµÐ´ÑˆÐ¾Ñ‚Ð°.
+        /// </summary>
+        public static bool CombatSurvivesHeadshot(this RPType type) => type switch
+        {
+            RPType.NONRP    => true,
+            RPType.LIGHTRP  => true,
+            RPType.FUNRP    => true,
+            RPType.MEDIUMRP => true,
+            _               => false
+        };
+
+        public static bool TryParse(string input, out RPType type)
+        {
+            type = RPType.NONRP;
+            if (string.IsNullOrWhiteSpace(input))
+                return false;
+
+            switch (input.Trim().ToUpperInvariant())
+            {
+                case "NRP":
+                case "NONRP":
+                    type = RPType.NONRP;   return true;
+                case "LRP":
+                case "LIGHTRP":
+                    type = RPType.LIGHTRP; return true;
+                case "FUNRP":
+                    type = RPType.FUNRP;   return true;
+                case "MRP":
+                case "MEDIUMRP":
+                    type = RPType.MEDIUMRP; return true;
+                case "HRP":
+                case "HARDRP":
+                    type = RPType.HARDRP;  return true;
+                case "FRP":
+                case "FULLRP":
+                    type = RPType.FULLRP;  return true;
+                default:
+                    return false;
+            }
+        }
+    }
+}
+ 
+using System;
+
+namespace EventHUD.Extensions
+{
+    public static class TimeExtensions
+    {
+        public static string ToHudFormat(this TimeSpan span)
+        {
+            return span.TotalHours >= 1
+                ? span.ToString(@"hh\:mm\:ss")
+                : span.ToString(@"mm\:ss");
+        }
+    }
+}
+ 

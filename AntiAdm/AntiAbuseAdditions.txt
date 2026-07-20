@@ -1,0 +1,462 @@
+// ============================================================
+// ДОПОЛНЕНИЯ В AntiAdmCommandHandler.cs
+// Анти-абуз: лимиты длины команд, защита от спама, cinfo/ckeycard
+// ============================================================
+
+// --- 1. Добавить в список полей класса (рядом с другими полями) ---
+
+// Лимиты длины команд (можно вынести в Config.cs)
+private const int MaxCommandLength = 4000;
+private const int MaxCinfoLength = 1000;
+private const int MaxCkeycardLength = 1000;
+
+// Спам повторяющимися командами (одинаковый текст подряд)
+private readonly Dictionary<string, (string LastQuery, DateTime LastTime, int Count)> _repeatHistory
+    = new Dictionary<string, (string, DateTime, int)>();
+
+private const int MaxRepeatCount = 5;
+private const float RepeatWindowSeconds = 10f;
+
+// Команды, которые не проверяются на повтор (админы жмут по бинду)
+private static readonly HashSet<string> RepeatCheckExempt = new(StringComparer.OrdinalIgnoreCase)
+{
+    "noclip", "goto", "tpx", "heal",
+};
+
+// Общий rate-limit: не больше N команд за окно с одного senderId
+private readonly Dictionary<string, (List<DateTime> Times, int DenyCount)> _rateLimitHistory
+    = new Dictionary<string, (List<DateTime>, int)>();
+
+private const int MaxCommandsPerWindow = 20;
+private const float RateLimitWindowSeconds = 10f;
+
+// Эскалация: N отказов за минуту -> блокировка RA
+private const int MaxDenyPerMinute = 10;
+private const float DenyBlockDurationSeconds = 120f;
+private readonly Dictionary<string, DateTime> _denyBlockedUntil = new Dictionary<string, DateTime>();
+
+// Аудит-лог (включение в Config.cs)
+// public bool AntiAdmAuditLogEnabled { get; set; } = true;
+// public string AntiAdmAuditLogWebhook { get; set; } = "";
+
+// --- 2. Добавить в метод Reset() ---
+
+_repeatHistory.Clear();
+_rateLimitHistory.Clear();
+_denyBlockedUntil.Clear();
+
+// --- 3. Добавить в начало OnSendingValidCommand, сразу после проверки ev.Query ---
+
+// AA-22: общая длина команды
+if (ev.Query.Length > MaxCommandLength)
+{
+    Deny(ev, "AA-22");
+    return;
+}
+
+// Проверка блокировки по эскалации
+if (_denyBlockedUntil.TryGetValue(senderId, out var blockedUntil) && DateTime.UtcNow < blockedUntil)
+{
+    Deny(ev, "AA-27");
+    return;
+}
+
+// AA-28: общий rate-limit (любые команды, не только одинаковые)
+if (!_rateLimitHistory.TryGetValue(senderId, out var rl))
+{
+    rl = (new List<DateTime>(), 0);
+    _rateLimitHistory[senderId] = rl;
+}
+var cutoff = DateTime.UtcNow.AddSeconds(-RateLimitWindowSeconds);
+rl.Times.RemoveAll(t => t < cutoff);
+rl.Times.Add(DateTime.UtcNow);
+if (rl.Times.Count > MaxCommandsPerWindow)
+{
+    Deny(ev, "AA-28");
+    return;
+}
+
+// AA-23: защита от спама одинаковой командой (только для тяжёлых, не для exempt)
+if (!RepeatCheckExempt.Contains(cmd))
+{
+    // Ленивое приведение к нижнему регистру — только если команда не в whitelist
+    string queryLower = ev.Query.ToLowerInvariant();
+    if (_repeatHistory.TryGetValue(senderId, out var last))
+    {
+        bool sameQuery = string.Equals(last.LastQuery, queryLower, StringComparison.Ordinal);
+        bool withinWindow = (DateTime.UtcNow - last.LastTime).TotalSeconds < RepeatWindowSeconds;
+
+        if (sameQuery && withinWindow)
+        {
+            int newCount = last.Count + 1;
+            _repeatHistory[senderId] = (queryLower, DateTime.UtcNow, newCount);
+            if (newCount > MaxRepeatCount)
+            {
+                Deny(ev, "AA-23");
+                return;
+            }
+        }
+        else
+        {
+            _repeatHistory[senderId] = (queryLower, DateTime.UtcNow, 1);
+        }
+    }
+    else
+    {
+        _repeatHistory[senderId] = (queryLower, DateTime.UtcNow, 1);
+    }
+}
+
+// AA-24: лимит длины для cinfo
+if (cmd == "cinfo" && args.Length > 0)
+{
+    string info = string.Join(" ", args);
+    if (info.Length > MaxCinfoLength)
+    {
+        Deny(ev, "AA-24");
+        return;
+    }
+}
+
+// AA-25: лимит длины для ckeycard
+if (cmd == "ckeycard" && args.Length > 0)
+{
+    string keycard = string.Join(" ", args);
+    if (keycard.Length > MaxCkeycardLength)
+    {
+        Deny(ev, "AA-25");
+        return;
+    }
+}
+
+// --- 4. Фильтр rich-text тегов TMP в текстовых командах ---
+// Блокировать <size=500>, <sprite>, <link>, <voffset>, <line-height> и т.д.
+// Разрешены только: <color>, <b>, <i>
+if (cmd == "cinfo" || cmd == "broadcast" || cmd == "customname" || cmd == "hint")
+{
+    string text = string.Join(" ", args);
+    if (ContainsDangerousRichText(text))
+    {
+        Deny(ev, "AA-29");
+        return;
+    }
+}
+
+// --- 5. Фильтр невидимых символов Юникода ---
+if (cmd == "cinfo" || cmd == "ckeycard" || cmd == "broadcast" || cmd == "customname" || cmd == "hint")
+{
+    string text = string.Join(" ", args);
+    if (ContainsInvisibleUnicode(text))
+    {
+        Deny(ev, "AA-30");
+        return;
+    }
+}
+
+// --- 6. Защита масс-таргета * для разрушительных команд ---
+if ((cmd == "kill" || cmd == "bring" || cmd == "scale" || cmd == "changescale")
+    && args.Length > 0 && args[0] == "*")
+{
+    Deny(ev, "AA-31");
+    return;
+}
+
+// --- 7. Кулдаун на команды, влияющие на раунд ---
+if (cmd == "roundrestart" || cmd == "lobbylock" || cmd == "forcestart"
+    || cmd == "cassie" || cmd == "announce")
+{
+    if (_lastCommandTime.TryGetValue(senderId, out var lastRoundCmd)
+        && (DateTime.UtcNow - lastRoundCmd).TotalSeconds < 30)
+    {
+        Deny(ev, "AA-32");
+        return;
+    }
+    _lastCommandTime[senderId] = DateTime.UtcNow;
+}
+
+// --- 8. Лимиты на scale/size/gravity ---
+if (cmd == "changescale" || cmd == "scale")
+{
+    if (TryParseScaleArgs(args, out float maxVal, out bool isDummy))
+    {
+        float limit = isDummy ? _config.AntiAdmDummyMaxScale : _config.AntiAdmMaxScale;
+        if (maxVal > limit)
+        {
+            Deny(ev, isDummy ? "AA-03" : "AA-06");
+            return;
+        }
+        // Дополнительно: запретить отрицательный scale
+        if (maxVal <= 0f)
+        {
+            Deny(ev, "AA-33");
+            return;
+        }
+    }
+}
+
+// --- 9. Добавить в HeavyCommands ---
+"cinfo", "ckeycard", "broadcast", "hint", "customname",
+"kill", "bring", "roundrestart", "lobbylock", "forcestart",
+"cassie", "announce",
+
+// --- 10. Добавить ID отказов в комментарий класса ---
+//   AA-22: Команда длиннее 4000 символов
+//   AA-23: Спам одинаковой командой (больше 5 раз за 10 секунд)
+//   AA-24: cinfo длиннее 1000 символов
+//   AA-25: ckeycard длиннее 1000 символов
+//   AA-26: (зарезервировано)
+//   AA-27: Временная блокировка RA из-за превышения лимита отказов
+//   AA-28: Общий rate-limit превышен (>20 команд за 10 секунд)
+//   AA-29: Запрещённые rich-text теги в тексте
+//   AA-30: Невидимые символы Юникода в тексте
+//   AA-31: Масс-таргет * запрещён для разрушительных команд
+//   AA-32: Кулдаун на команды, влияющие на раунд
+//   AA-33: Отрицательный или нулевой scale
+
+// ============================================================
+// ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+// ============================================================
+
+/// <summary>
+/// Проверяет, содержит ли текст запрещённые rich-text теги TMP.
+/// Разрешены только: <color>, <b>, </b>, <i>, </i>, </color>.
+/// </summary>
+private static bool ContainsDangerousRichText(string text)
+{
+    if (string.IsNullOrEmpty(text))
+        return false;
+
+    int idx = 0;
+    while (true)
+    {
+        int open = text.IndexOf('<', idx);
+        if (open < 0)
+            break;
+
+        int close = text.IndexOf('>', open);
+        if (close < 0)
+            break;
+
+        string tag = text.Substring(open, close - open + 1);
+
+        // Проверяем, разрешён ли тег
+        bool allowed = false;
+        if (tag.StartsWith("<color") || tag == "</color>"
+            || tag == "<b>" || tag == "</b>"
+            || tag == "<i>" || tag == "</i>")
+        {
+            allowed = true;
+        }
+
+        if (!allowed)
+            return true;
+
+        idx = close + 1;
+    }
+
+    return false;
+}
+
+/// <summary>
+/// Проверяет, содержит ли текст невидимые символы Юникода.
+/// </summary>
+private static bool ContainsInvisibleUnicode(string text)
+{
+    if (string.IsNullOrEmpty(text))
+        return false;
+
+    foreach (char c in text)
+    {
+        // Zero-width space, zero-width non-joiner, zero-width joiner, BOM
+        if (c == '\u200B' || c == '\u200C' || c == '\u200D' || c == '\uFEFF')
+            return true;
+
+        // RTL override, LTR override, pop directional formatting
+        if (c == '\u202E' || c == '\u202D' || c == '\u202C')
+            return true;
+
+        // Управляющие символы (кроме разрешённых \n, \r, \t)
+        if (char.GetUnicodeCategory(c) == System.Globalization.UnicodeCategory.Control
+            && c != '\n' && c != '\r' && c != '\t')
+            return true;
+    }
+
+    return false;
+}
+
+// --- 11. Очистка _repeatHistory при выходе игрока ---
+// Добавить в метод OnLeft (PlayerEventHandlers.cs):
+// _antiAdmCommands?.CleanupPlayer(userId);
+
+// Добавить в AntiAdmCommandHandler:
+public void CleanupPlayer(string userId)
+{
+    _repeatHistory.Remove(userId);
+    _rateLimitHistory.Remove(userId);
+    _denyBlockedUntil.Remove(userId);
+}
+
+// --- 12. Эскалация при отказах ---
+// Модифицировать метод Deny:
+private void Deny(SendingValidCommandEventArgs ev, string id)
+{
+    ev.IsAllowed = false;
+    ev.Response = $"<color=red>Отказ [{id}]</color>";
+
+    // Эскалация
+    if (_rateLimitHistory.TryGetValue(ev.Player?.UserId ?? "console", out var rl))
+    {
+        rl.DenyCount++;
+        if (rl.DenyCount >= MaxDenyPerMinute)
+        {
+            string uid = ev.Player?.UserId ?? "console";
+            _denyBlockedUntil[uid] = DateTime.UtcNow.AddSeconds(DenyBlockDurationSeconds);
+            Log.Warn($"[AntiAdm] {uid} заблокирован на {DenyBlockDurationSeconds}с (превышен лимит отказов)");
+
+            // Опционально: уведомление в Discord
+            // DiscordWebhookService.Send($"[ANTI-ABUSE] {uid} заблокирован на {DenyBlockDurationSeconds}с ({rl.DenyCount} отказов)");
+        }
+    }
+}
+
+// --- 13. Bypass-список (владельцы/старшие ранги) ---
+// Добавить в Config.cs:
+// [Description("SteamID, которые игнорируют анти-абуз лимиты")]
+// public System.Collections.Generic.List<string> AntiAdmBypassIds { get; set; } =
+//     new System.Collections.Generic.List<string> { "76561199687703494@steam" };
+
+// В начале OnSendingValidCommand добавить:
+// if (_config.AntiAdmBypassIds.Contains(senderId))
+//     return; // пропускаем все проверки
+
+// ============================================================
+// ПРИМЕР ГОТОВОГО БЛОКА ДЛЯ ВСТАВКИ В OnSendingValidCommand
+// ============================================================
+/*
+// Bypass
+if (_config.AntiAdmBypassIds.Contains(senderId))
+    return;
+
+// AA-22: общая длина команды
+if (ev.Query.Length > MaxCommandLength)
+{
+    Deny(ev, "AA-22");
+    return;
+}
+
+// Проверка блокировки по эскалации
+if (_denyBlockedUntil.TryGetValue(senderId, out var blockedUntil) && DateTime.UtcNow < blockedUntil)
+{
+    Deny(ev, "AA-27");
+    return;
+}
+
+// AA-28: общий rate-limit
+if (!_rateLimitHistory.TryGetValue(senderId, out var rl))
+{
+    rl = (new List<DateTime>(), 0);
+    _rateLimitHistory[senderId] = rl;
+}
+var cutoff = DateTime.UtcNow.AddSeconds(-RateLimitWindowSeconds);
+rl.Times.RemoveAll(t => t < cutoff);
+rl.Times.Add(DateTime.UtcNow);
+if (rl.Times.Count > MaxCommandsPerWindow)
+{
+    Deny(ev, "AA-28");
+    return;
+}
+
+// AA-23: защита от спама одинаковой командой
+if (!RepeatCheckExempt.Contains(cmd))
+{
+    string queryLower = ev.Query.ToLowerInvariant();
+    if (_repeatHistory.TryGetValue(senderId, out var last))
+    {
+        bool sameQuery = string.Equals(last.LastQuery, queryLower, StringComparison.Ordinal);
+        bool withinWindow = (DateTime.UtcNow - last.LastTime).TotalSeconds < RepeatWindowSeconds;
+        if (sameQuery && withinWindow)
+        {
+            int newCount = last.Count + 1;
+            _repeatHistory[senderId] = (queryLower, DateTime.UtcNow, newCount);
+            if (newCount > MaxRepeatCount)
+            {
+                Deny(ev, "AA-23");
+                return;
+            }
+        }
+        else
+        {
+            _repeatHistory[senderId] = (queryLower, DateTime.UtcNow, 1);
+        }
+    }
+    else
+    {
+        _repeatHistory[senderId] = (queryLower, DateTime.UtcNow, 1);
+    }
+}
+
+// AA-24: лимит длины для cinfo
+if (cmd == "cinfo" && args.Length > 0)
+{
+    string info = string.Join(" ", args);
+    if (info.Length > MaxCinfoLength)
+    {
+        Deny(ev, "AA-24");
+        return;
+    }
+}
+
+// AA-25: лимит длины для ckeycard
+if (cmd == "ckeycard" && args.Length > 0)
+{
+    string keycard = string.Join(" ", args);
+    if (keycard.Length > MaxCkeycardLength)
+    {
+        Deny(ev, "AA-25");
+        return;
+    }
+}
+
+// AA-29: фильтр rich-text тегов
+if (cmd == "cinfo" || cmd == "broadcast" || cmd == "customname" || cmd == "hint")
+{
+    string text = string.Join(" ", args);
+    if (ContainsDangerousRichText(text))
+    {
+        Deny(ev, "AA-29");
+        return;
+    }
+}
+
+// AA-30: фильтр невидимых символов
+if (cmd == "cinfo" || cmd == "ckeycard" || cmd == "broadcast" || cmd == "customname" || cmd == "hint")
+{
+    string text = string.Join(" ", args);
+    if (ContainsInvisibleUnicode(text))
+    {
+        Deny(ev, "AA-30");
+        return;
+    }
+}
+
+// AA-31: защита масс-таргета *
+if ((cmd == "kill" || cmd == "bring" || cmd == "scale" || cmd == "changescale")
+    && args.Length > 0 && args[0] == "*")
+{
+    Deny(ev, "AA-31");
+    return;
+}
+
+// AA-32: кулдаун на команды раунда
+if (cmd == "roundrestart" || cmd == "lobbylock" || cmd == "forcestart"
+    || cmd == "cassie" || cmd == "announce")
+{
+    if (_lastCommandTime.TryGetValue(senderId, out var lastRoundCmd)
+        && (DateTime.UtcNow - lastRoundCmd).TotalSeconds < 30)
+    {
+        Deny(ev, "AA-32");
+        return;
+    }
+    _lastCommandTime[senderId] = DateTime.UtcNow;
+}
+*/

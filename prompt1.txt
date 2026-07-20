@@ -1,0 +1,1434 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using Exiled.API.Features;
+using MEC;
+
+namespace EventHUD.Hud
+{
+    public class HudCompositor
+    {
+        private readonly Config          _config;
+        private readonly EffectScheduler _effects;
+        private          CoroutineHandle _tickHandle;
+        private readonly HashSet<string> _afkPlayers = new();
+
+        public HudCompositor(Config config, EffectScheduler effects)
+        {
+            _config  = config;
+            _effects = effects;
+        }
+
+        public void Start() => _tickHandle = Timing.RunCoroutine(TickLoop());
+        public void Stop()  => Timing.KillCoroutines(_tickHandle);
+
+        private IEnumerator<float> TickLoop()
+        {
+            while (true)
+            {
+                float interval = GetCurrentInterval();
+
+                foreach (var player in Player.List)
+                {
+                    try
+                    {
+                        if (!HudToggleService.IsEnabled(player))
+                            continue;
+
+                        // ÐÐµ Ð¿Ð¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÐ¼ HUD Ð´Ð»Ñ Dummy-Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð² Ð¸ Ð±Ð¾Ñ‚Ð¾Ð²
+                        if (player.IsNPC || (player.Nickname != null && player.Nickname.Contains("Dummy")))
+                            continue;
+
+                        // AFK: ÐµÑÐ»Ð¸ Ð¸Ð³Ñ€Ð¾Ðº Ð½Ðµ Ð´Ð²Ð¸Ð³Ð°Ð»ÑÑ > 5 Ð¼Ð¸Ð½ÑƒÑ‚ â€” Ð¿Ñ€Ð¾Ð¿ÑƒÑÐºÐ°ÐµÐ¼
+                        if (IsAfk(player))
+                        {
+                            _afkPlayers.Add(player.UserId);
+                            continue;
+                        }
+                        _afkPlayers.Remove(player.UserId);
+
+                        string text = Build(player);
+                        if (!string.IsNullOrEmpty(text))
+                            player.ShowHint(text, interval + 2f);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Debug($"[HUD] TickLoop exception for {player?.Nickname}: {ex.Message}");
+                    }
+                }
+
+                yield return Timing.WaitForSeconds(interval);
+            }
+        }
+
+        private bool IsAfk(Player player)
+        {
+            try
+            {
+                // Exiled Ð½Ðµ Ð¸Ð¼ÐµÐµÑ‚ Ð²ÑÑ‚Ñ€Ð¾ÐµÐ½Ð½Ð¾Ð³Ð¾ AFK, Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ Position ÐºÐ°Ðº ÑÐ²Ñ€Ð¸ÑÑ‚Ð¸ÐºÑƒ
+                // Ð£Ð¿Ñ€Ð¾Ñ‰Ñ‘Ð½Ð½Ð¾: ÐµÑÐ»Ð¸ Ð¸Ð³Ñ€Ð¾Ðº Spectator/Dead â€” Ð½Ðµ ÑÑ‡Ð¸Ñ‚Ð°ÐµÐ¼ AFK
+                if (!player.IsAlive) return false;
+                // Ð—Ð´ÐµÑÑŒ Ð¼Ð¾Ð¶Ð½Ð¾ Ð´Ð¾Ð±Ð°Ð²Ð¸Ñ‚ÑŒ ÐºÐ°ÑÑ‚Ð¾Ð¼Ð½Ñ‹Ð¹ AFK-Ñ‚Ñ€ÐµÐºÐµÑ€
+                return false;
+            }
+            catch { return false; }
+        }
+
+        private float GetCurrentInterval()
+        {
+            bool anyEffect = _effects.State.IsMinutePulseActive ||
+                             _effects.State.IsFlashActive;
+
+            return anyEffect ? _config.EffectTickInterval : _config.HudUpdateInterval;
+        }
+
+        private string Build(Player player)
+        {
+            var sw = Stopwatch.StartNew();
+
+            string card      = PlayerCardBuilder.Build(player, _config);
+            string eventPart = EventStatusBuilder.Build(_config);
+            string full      = card + eventPart;
+
+            sw.Stop();
+            if (sw.ElapsedMilliseconds > 5 && _config.Debug)
+                Log.Debug($"[HUD] Build took {sw.ElapsedMilliseconds}ms for {player.Nickname}");
+
+            // Ð¥Ð¸Ð½Ñ‚ ÑÐ¼ÐµÐ½Ñ‹ Ð²Ð¾Ð»Ð½Ñ‹ (1 ÑÐµÐº, Ð¿Ð¾Ð²ÐµÑ€Ñ… Ð²ÑÐµÐ³Ð¾)
+            string radioNotice = Radio.RadioSwitchNoticeService.GetActive(player);
+            if (!string.IsNullOrEmpty(radioNotice))
+            {
+                full +=
+                    $"<indent={_config.RadioSwitchHintIndent}%>" +
+                    $"<voffset={_config.RadioSwitchHintVoffset}em>" +
+                    $"<size={_config.RadioSwitchHintFontSize}>" +
+                    radioNotice +
+                    "</size>";
+            }
+
+            // ÐžÐ±Ñ‰Ð¸Ðµ ÑƒÐ²ÐµÐ´Ð¾Ð¼Ð»ÐµÐ½Ð¸Ñ (SCP, Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ð°, ÐºÐ¾Ð¼Ð°Ð½Ð´Ñ‹) â€” Ð² ÑÑ‚Ð¾Ð¼ Ð¶Ðµ Ñ…Ð¸Ð½Ñ‚Ðµ
+            // Ð’ÐÐ–ÐÐž: Ð±ÐµÐ· <align> â€” align Ð² TMP Ð´ÐµÐ¹ÑÑ‚Ð²ÑƒÐµÑ‚ Ð½Ð° Ð²ÑÑŽ ÑÑ‚Ñ€Ð¾ÐºÑƒ Ð¸ ÑÐ´Ð²Ð¸Ð³Ð°ÐµÑ‚ Ð²ÐµÑÑŒ HUD
+            string notice = HudNoticeService.GetActive(player);
+            if (!string.IsNullOrEmpty(notice))
+            {
+                full +=
+                    $"<indent={_config.RadioSwitchHintIndent}%>" +
+                    "<voffset=10em>" +
+                    "<size=32>" + notice + "</size>";
+            }
+
+            // Ð­Ñ„Ñ„ÐµÐºÑ‚Ñ‹ Ñ†Ð²ÐµÑ‚Ð°
+            if (_effects.State.IsFlashActive)
+            {
+                full = EffectApplier.ApplyColorOverlay(
+                    full,
+                    _effects.State.FlashProgress,
+                    _config.ColorFlashColor);
+            }
+            else if (_effects.State.IsMinutePulseActive)
+            {
+                full = EffectApplier.ApplyColorOverlay(
+                    full,
+                    _effects.State.MinutePulseProgress,
+                    _config.MinutePulseColor);
+            }
+
+            return full;
+        }
+    }
+}
+ 
+using EventHUD.Medicine;
+using EventHUD.Rpm;
+using Exiled.API.Features;
+
+namespace EventHUD.Hud
+{
+    public static class PlayerCardBuilder
+    {
+        public static string Build(Player player, Config c)
+        {
+            bool medicineEnabled = RpModuleManager.Instance.IsEnabled(RpModuleType.Medicine);
+
+            string displayName = string.IsNullOrEmpty(player.DisplayNickname) ? player.Nickname : player.DisplayNickname;
+            string cInfoValue = string.IsNullOrEmpty(player.CustomInfo) ? "â€”" : player.CustomInfo;
+
+            // â”€â”€ ÐŸÐ¾Ñ€ÑÐ´Ð¾Ðº ÑÑ‚Ñ€Ð¾Ðº (ÑÐ²ÐµÑ€Ñ…Ñƒ Ð²Ð½Ð¸Ð·) â”€â”€
+            // 1. Ð—Ð°Ð³Ð¾Ð»Ð¾Ð²Ð¾Ðº / [id] [name] / CInfo
+            // 2. Ð Ð°Ñ†Ð¸Ñ (Ð²Ñ‹ÑˆÐµ Ð°Ð¿Ñ‚ÐµÑ‡ÐºÐ¸ Ð½Ð° 1 ÑÑ‚Ñ€Ð¾ÐºÑƒ)
+            // 3. Ð‘Ñ€Ð¾Ð½ÐµÐ¶Ð¸Ð»ÐµÑ‚
+            // 4. Ð¡Ð¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ (Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ð°)
+            // 5. ÐÐ¿Ñ‚ÐµÑ‡ÐºÐ° (Ð²Ð½Ð¸Ð·Ñƒ, Ð½Ð¸Ð¶Ðµ Ð²ÑÐµÑ…)
+
+            // Ð Ð°Ñ†Ð¸Ñ â€” Ð²ÑÐµÐ³Ð´Ð° Ð½Ð° ÑÐ²Ð¾ÐµÐ¹ Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ð¸
+            string radioSegment = RadioHudSegment.Build(player, c, c.RadioWaveVoffset);
+            bool hasRadio = !string.IsNullOrEmpty(radioSegment);
+
+            // Ð•ÑÐ»Ð¸ Ñ€Ð°Ñ†Ð¸Ð¸ Ð½ÐµÑ‚ â€” Ð¿Ð¾Ð´Ð½Ð¸Ð¼Ð°ÐµÐ¼ Ð²ÑÑ‘ Ð½Ð° 1 ÑÑ‚Ñ€Ð¾ÐºÑƒ Ð²Ñ‹ÑˆÐµ
+            float currentVoffset = hasRadio ? c.RadioWaveVoffset - 1f : c.RadioWaveVoffset;
+
+            string bottomSegment = string.Empty;
+
+            if (medicineEnabled)
+            {
+                bool hasMedkitInHand = player.CurrentItem != null && player.CurrentItem.Type == ItemType.Medkit;
+
+                // â”€â”€ Ð‘Ñ€Ð¾Ð½ÐµÐ¶Ð¸Ð»ÐµÑ‚ (ÑÑ‚Ñ€Ð¾ÐºÐ° 3) â”€â”€
+                string armorSegment = ArmorHudSegment.Build(player, c, currentVoffset);
+                if (!string.IsNullOrEmpty(armorSegment))
+                {
+                    bottomSegment += armorSegment;
+                    currentVoffset -= 1f; // ÑÐ»ÐµÐ´ÑƒÑŽÑ‰Ð°Ñ ÑÑ‚Ñ€Ð¾ÐºÐ° Ð½Ð¸Ð¶Ðµ
+                }
+
+                // â”€â”€ Ð¡Ð¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ / Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ð° (ÑÑ‚Ñ€Ð¾ÐºÐ° 4) â”€â”€
+                // ÐŸÐ¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÐ¼ Ð²ÑÐµÐ³Ð´Ð° (Ð´Ð°Ð¶Ðµ "ÐÐ¾Ñ€Ð¼Ð°"), ÐµÑÐ»Ð¸ Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ð° Ð²ÐºÐ»ÑŽÑ‡ÐµÐ½Ð°
+                float medVoffset1 = currentVoffset;
+                float medVoffset2 = currentVoffset - 1f;
+                bottomSegment += MedicineHudSegment.Build(player, c, medVoffset1, medVoffset2, out int medLines);
+                currentVoffset -= medLines; // ÑÑ‚Ð¾Ð»ÑŒÐºÐ¾ ÑÑ‚Ñ€Ð¾Ðº, ÑÐºÐ¾Ð»ÑŒÐºÐ¾ Ñ€ÐµÐ°Ð»ÑŒÐ½Ð¾ Ð·Ð°Ð½ÑÐ»Ð° Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ð°
+
+                // â”€â”€ ÐÐ¿Ñ‚ÐµÑ‡ÐºÐ° (ÑÑ‚Ñ€Ð¾ÐºÐ° 5, Ð½Ð° 1 ÑÑ‚Ñ€Ð¾ÐºÑƒ Ð½Ð¸Ð¶Ðµ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ñ) â”€â”€
+                if (hasMedkitInHand)
+                {
+                    ushort serial = player.CurrentItem.Serial;
+                    var kit = MedkitInventoryStorage.GetOrCreate(serial);
+                    bottomSegment += MedkitHudSegment.Build(player, player, kit, c, currentVoffset);
+                }
+            }
+
+            string result = $"<size={c.BaseFontSize}><voffset={c.TitleVoffset}em><align=left><indent={c.TitleIndent}%><color={c.TitleColor}><b>{c.TitleText}" +
+                   $"<voffset={c.NicknameVoffset}em><indent={c.NicknameIndent}%></color>" +
+                   $"<size={c.NicknameFontSize}> [{player.Id}] [{displayName}]</size>" +
+                   $"<voffset={c.RoleLabelVoffset}em><indent={c.RoleLabelIndent}%>{c.RoleLabelText}: " +
+                   $"<voffset={c.RoleValueVoffset}em>" +
+                   $"<size={c.RoleValueFontSize}><color={c.RoleValueColor}>\"{cInfoValue}\"</color></size>" +
+                   radioSegment + bottomSegment;
+
+            // SCP-049 HUD (Ð¸Ð½Ð²ÐµÐ½Ñ‚Ð°Ñ€ÑŒ)
+            if (Plugin.Instance?.Scp049 != null)
+            {
+                string scp049Hud = Plugin.Instance.Scp049.BuildHud(player, currentVoffset);
+                if (!string.IsNullOrEmpty(scp049Hud))
+                    result += scp049Hud;
+            }
+
+            return result;
+        }
+    }
+}
+using System.Text.RegularExpressions;
+using EventHUD.Enums;
+using EventHUD.Extensions;
+using EventHUD.Models;
+
+namespace EventHUD.Hud
+{
+    public static class EventStatusBuilder
+    {
+        public static string Build(Config c)
+        {
+            var session = EventManager.Instance.Session;
+
+            if (session.State == EventState.None)
+                return $"<indent=0%><voffset={c.EventVoffset}em><alpha=#00>.</alpha>";
+
+            string text   = BuildStateText(c, session);
+            float  indent = CalculateIndent(c, text);
+
+            return $"<indent={indent:0.###}%><voffset={c.EventVoffset}em>{text}";
+        }
+
+        private static string BuildStateText(Config c, EventSession session)
+        {
+            if (EventManager.Instance.IsAfk(c.AfkThresholdSeconds))
+                return $"<color={c.AfkColor}>{c.AfkText}</color>";
+
+            string text = RawText(session);
+
+            if (session.State != EventState.Stopping)
+            {
+                if (session.ShowHostReturnHighlight)
+                    text = $"<color={c.HostReturnColor}>{StripColorTags(text)}</color>";
+                else if (!session.HostIsOnline)
+                    text = $"<color={c.HostOfflineColor}>{StripColorTags(text)}</color>";
+            }
+
+            return text;
+        }
+
+        private static float CalculateIndent(Config c, string text)
+        {
+            float indent = c.EventIndentBase - c.EventIndentSlope * text.VisibleLength();
+            // ÐœÐ¸Ð½Ð¸Ð¼ÑƒÐ¼ 18% Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð½Ðµ ÑƒÐµÑ…Ð°Ð»Ð¾ Ð·Ð° ÐºÑ€Ð°Ð¹
+            if (indent < 18f) indent = 18f;
+            return indent;
+        }
+
+        private static string RawText(EventSession s) => s.State switch
+        {
+            EventState.Preparing =>
+                $"Ð˜Ð´Ñ‘Ñ‚ Ð¿Ð¾Ð´Ð³Ð¾Ñ‚Ð¾Ð²ÐºÐ° Ð¸Ð²ÐµÐ½Ñ‚Ð°: <b>{s.EventName}</b> | Ð’Ñ€ÐµÐ¼Ñ: {s.Elapsed.ToHudFormat()} | {RpTag(s)}",
+            EventState.Starting =>
+                $"Ð˜Ð²ÐµÐ½Ñ‚ Ð½Ð°Ñ‡Ð¸Ð½Ð°ÐµÑ‚ÑÑ: <b>{s.EventName}</b> | {RpTag(s)}",
+            EventState.Running =>
+                $"Ð˜Ð´Ñ‘Ñ‚ Ð¸Ð²ÐµÐ½Ñ‚: <b>{s.EventName}</b> | Ð’Ñ€ÐµÐ¼Ñ: {s.Elapsed.ToHudFormat()} | {RpTag(s)}",
+            EventState.Stopping =>
+                $"Ð˜Ð²ÐµÐ½Ñ‚ Ð·Ð°Ð²ÐµÑ€ÑˆÑ‘Ð½ | Ð’Ñ€ÐµÐ¼Ñ: {(s.StoppedAt - s.StartedAt).ToHudFormat()} | ÐŸÑ€Ð¾Ð²Ð¾Ð´ÑÑ‰Ð¸Ð¹: {s.HostNickname}",
+            _ => string.Empty
+        };
+
+        private static string RpTag(EventSession s) =>
+            $"<color={s.RpType.GetColor()}>{s.RpType.GetShortName()}</color>";
+
+        private static string StripColorTags(string input) =>
+            Regex.Replace(input, "<color=.*?>|</color>", "");
+    }
+}
+ 
+using EventHUD.Radio;
+using Exiled.API.Enums;
+using Exiled.API.Features;
+using PlayerRoles;
+
+namespace EventHUD.Hud
+{
+    using ExiledRadio = Exiled.API.Features.Items.Radio;
+
+    /// <summary>
+    /// Ð¡Ñ‚Ñ€Ð¾ÐºÐ° "Ð’Ð¾Ð»Ð½Ð° Ñ€Ð°Ñ†Ð¸Ð¸: ÐœÐžÐ“" Ð² ÐºÐ°Ñ€Ñ‚Ð¾Ñ‡ÐºÐµ Ð¸Ð³Ñ€Ð¾ÐºÐ°.
+    ///
+    /// ÐŸÐ¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÑ‚ÑÑ ÐµÑÐ»Ð¸:
+    ///   â€¢ Ð Ð¾Ð»ÑŒ Ð½Ðµ Ð¡Ð¦ÐŸ, Ð½Ðµ Overwatch, Ð½Ðµ Spectator, Ð½Ðµ Filmmaker.
+    ///   â€¢ Ð’ Ð¸Ð½Ð²ÐµÐ½Ñ‚Ð°Ñ€Ðµ ÐµÑÑ‚ÑŒ Ñ€Ð°Ñ†Ð¸Ñ (Ð½ÐµÐ¾Ð±ÑÐ·Ð°Ñ‚ÐµÐ»ÑŒÐ½Ð¾ Ð² Ñ€ÑƒÐºÐ°Ñ…).
+    ///
+    /// Ð”Ð¾Ð¿Ð¾Ð»Ð½Ð¸Ñ‚ÐµÐ»ÑŒÐ½Ð¾ Ð¿Ð¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÑ‚ Ñ‡Ð¸ÑÐ»Ð¾Ð²ÑƒÑŽ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ñƒ Ñ€ÑÐ´Ð¾Ð¼ Ñ Ð²Ð¾Ð»Ð½Ð¾Ð¹,
+    /// ÐµÑÐ»Ð¸ Ð¸Ð³Ñ€Ð¾Ðº Ð´ÐµÑ€Ð¶Ð¸Ñ‚ Ñ‡ÑƒÐ¶ÑƒÑŽ Ñ€Ð°Ñ†Ð¸ÑŽ (Ð²Ð¾Ð»Ð½Ð° Ð½Ðµ Ð¿Ñ€Ð¸Ð½Ð°Ð´Ð»ÐµÐ¶Ð¸Ñ‚ ÐµÐ³Ð¾ Ñ€Ð¾Ð»Ð¸)
+    /// Ð¸ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ð° Ð½Ð¸Ð¶Ðµ 300 â€” Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð”-ÐºÐ»Ð°ÑÑ Ð¼Ð¾Ð³ Ð¿ÐµÑ€ÐµÐ´Ð°Ñ‚ÑŒ Ð¸Ð½Ñ„Ð¾Ñ€Ð¼Ð°Ñ†Ð¸ÑŽ Ð´Ñ€ÑƒÐ³Ð¸Ð¼.
+    /// </summary>
+    public static class RadioHudSegment
+    {
+        private static readonly RoleTypeId[] _excluded =
+        {
+            RoleTypeId.Spectator,
+            RoleTypeId.Overwatch,
+            RoleTypeId.Filmmaker
+        };
+
+        public static string Build(Player player, Config c, float? voffsetOverride = null)
+        {
+            // Ð¡Ð¦ÐŸ â€” Ð½Ðµ Ð¿Ð¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÐ¼
+            if (player.Role.Team == Team.SCPs)
+                return string.Empty;
+
+            // Ð˜ÑÐºÐ»ÑŽÑ‡Ñ‘Ð½Ð½Ñ‹Ðµ Ñ€Ð¾Ð»Ð¸
+            foreach (var role in _excluded)
+                if (player.Role.Type == role)
+                    return string.Empty;
+
+            // Ð˜Ñ‰ÐµÐ¼ Ñ€Ð°Ñ†Ð¸ÑŽ Ð² Ð¸Ð½Ð²ÐµÐ½Ñ‚Ð°Ñ€Ðµ
+            ExiledRadio radio = null;
+            foreach (var item in player.Items)
+            {
+                if (item is ExiledRadio r) { radio = r; break; }
+            }
+
+            if (radio == null)
+                return string.Empty;
+
+            // Ð•ÑÐ»Ð¸ Ñ€Ð°Ñ†Ð¸Ñ Ð½Ðµ Ð½Ð°ÑÑ‚Ñ€Ð¾ÐµÐ½Ð° â€” Ð¿Ð¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÐ¼ "?"
+            if (!RadioFrequencyStorage.TryGet(radio.Serial, out var state))
+            {
+                float unassignedVoffset = voffsetOverride ?? c.RadioWaveVoffset;
+                return $"<voffset={unassignedVoffset}em><indent={c.RadioWaveIndent}%>" +
+                       $"{c.RadioWaveLabel}: <color={RadioTeam.Unknown.GetColor()}>{RadioTeam.Unknown.GetDisplayName()}</color>";
+            }
+
+            // ÐœÐµÑ‚ÐºÐ° Ð²Ð¾Ð»Ð½Ñ‹
+            string label = state.Team == RadioTeam.Custom
+                ? $"{state.Frequency:0.0}"
+                : state.Team.GetDisplayName();
+
+            string color     = state.Team.GetColor();
+            string freqHint  = BuildFrequencyHint(player, state);
+
+            float voffset = voffsetOverride ?? c.RadioWaveVoffset;
+
+            return
+                $"<voffset={voffset}em><indent={c.RadioWaveIndent}%>" +
+                $"{c.RadioWaveLabel}: <color={color}>{label}</color>" +
+                freqHint;
+        }
+
+        /// <summary>
+        /// Ð•ÑÐ»Ð¸ Ð¸Ð³Ñ€Ð¾Ðº Ð´ÐµÑ€Ð¶Ð¸Ñ‚ "Ñ‡ÑƒÐ¶ÑƒÑŽ" Ñ€Ð°Ñ†Ð¸ÑŽ (Ð²Ð¾Ð»Ð½Ð° Ð½Ðµ Ð²Ñ…Ð¾Ð´Ð¸Ñ‚ Ð² ÑÐ¿Ð¸ÑÐ¾Ðº ÐµÐ³Ð¾ Ñ€Ð¾Ð»Ð¸)
+        /// Ð¸ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ð° Ð¼ÐµÐ½ÑŒÑˆÐµ 300 â€” Ð¿Ð¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÐ¼ Ñ‡Ð¸ÑÐ»Ð¾Ð²ÑƒÑŽ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ñƒ ÑÐµÑ€Ñ‹Ð¼.
+        /// Ð­Ñ‚Ð¾ Ð¿Ð¾Ð·Ð²Ð¾Ð»ÑÐµÑ‚ Ð”-ÐºÐ»Ð°ÑÑÑƒ ÑƒÐ·Ð½Ð°Ñ‚ÑŒ Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ñƒ Ð¡Ð‘-ÑˆÐ½Ð¸ÐºÐ° Ð¸ Ð¿ÐµÑ€ÐµÐ´Ð°Ñ‚ÑŒ ÐµÑ‘ Ð´Ñ€ÑƒÐ³Ð¸Ð¼.
+        /// </summary>
+        private static string BuildFrequencyHint(Player player, RadioState state)
+        {
+            // Custom â€” Ñ‡Ð°ÑÑ‚Ð¾Ñ‚Ð° Ð¸ Ñ‚Ð°Ðº Ð¾Ñ‚Ð¾Ð±Ñ€Ð°Ð¶Ð°ÐµÑ‚ÑÑ Ñ‡Ð¸ÑÐ»Ð¾Ð¼
+            if (state.Team == RadioTeam.Custom)
+                return string.Empty;
+
+            // Ð§Ð°ÑÑ‚Ð¾Ñ‚Ñ‹ â‰¥ 300 ÑÐºÑ€Ñ‹Ñ‚Ñ‹ Ð¿Ð¾ Ð¢Ð—
+            if (state.Frequency >= 300f)
+                return string.Empty;
+
+            // Ð•ÑÐ»Ð¸ ÑÑ‚Ð° Ð²Ð¾Ð»Ð½Ð° "Ñ€Ð¾Ð´Ð½Ð°Ñ" Ð´Ð»Ñ Ñ€Ð¾Ð»Ð¸ â€” Ð¿Ð¾Ð´ÑÐºÐ°Ð·ÐºÑƒ Ð½Ðµ Ð¿Ð¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÐ¼
+            var ownTeams = RadioModeProvider.GetAvailableTeams(player);
+            if (ownTeams.Contains(state.Team))
+                return string.Empty;
+
+            return $" <color=#888888>({state.Frequency:0.0})</color>";
+        }
+    }
+}
+ 
+using EventHUD.Medicine;
+using Exiled.API.Features;
+using PlayerRoles;
+
+namespace EventHUD.Hud
+{
+    public static class ArmorHudSegment
+    {
+        public static string Build(
+            Player player,
+            Config config,
+            float verticalOffset)
+        {
+            ArmorState armor =
+                ArmorStorage.GetOrCreate(player.UserId);
+
+            bool hasArmorItem = false;
+
+            foreach (var item in player.Items)
+            {
+                if (item.Type == ItemType.ArmorLight ||
+                    item.Type == ItemType.ArmorCombat ||
+                    item.Type == ItemType.ArmorHeavy)
+                {
+                    hasArmorItem = true;
+                    break;
+                }
+            }
+
+            if (!hasArmorItem)
+            {
+                if (armor.Type != ArmorType.None)
+                    armor.Reset();
+
+                return string.Empty;
+            }
+
+            if (armor.Type == ArmorType.None)
+            {
+                foreach (var item in player.Items)
+                {
+                    ArmorType armorType;
+
+                    switch (item.Type)
+                    {
+                        // Ð•ÑÐ»Ð¸ ArmorLight Ð¾ÑÑ‚Ð°Ñ‘Ñ‚ÑÑ Ð±Ñ€Ð¾Ð½ÐµÐ¶Ð¸Ð»ÐµÑ‚Ð¾Ð¼,
+                        // Ð·Ð°Ð¼ÐµÐ½Ð¸ Helmet Ð½Ð° Light.
+                        case ItemType.ArmorLight:
+                            armorType = ArmorType.Helmet;
+                            break;
+
+                        case ItemType.ArmorCombat:
+                            armorType = ArmorType.Combat;
+                            break;
+
+                        case ItemType.ArmorHeavy
+                            when player.Role.Type == RoleTypeId.NtfCaptain:
+                            armorType = ArmorType.Tank;
+                            break;
+
+                        case ItemType.ArmorHeavy:
+                            armorType = ArmorType.Heavy;
+                            break;
+
+                        default:
+                            continue;
+                    }
+
+                    armor.SetType(armorType);
+                    break;
+                }
+            }
+
+            if (armor.Type == ArmorType.None)
+                return string.Empty;
+
+            if (armor.Type == ArmorType.Helmet)
+            {
+                string helmetText = armor.HelmetDurability > 0
+                    ? "<color=#4CAF50>Ð¨Ð»ÐµÐ¼: Ñ†ÐµÐ»</color>"
+                    : "<color=#F44336>Ð¨Ð»ÐµÐ¼: Ð¿Ñ€Ð¾Ð±Ð¸Ñ‚</color>";
+
+                return
+                    $"<voffset={verticalOffset}em>" +
+                    $"<indent={config.MedicineHudIndent}%>" +
+                    helmetText;
+            }
+
+            float percentage = armor.MaxDurability > 0f
+                ? armor.Durability / armor.MaxDurability * 100f
+                : 0f;
+
+            if (percentage < 0f)
+                percentage = 0f;
+
+            if (percentage > 100f)
+                percentage = 100f;
+
+            string color = InterpolateColor(percentage);
+
+            string percentageText = armor.IsBroken
+                ? "Ð Ð°Ð·Ñ€ÑƒÑˆÐµÐ½"
+                : $"{percentage:0}%";
+
+            return
+                $"<voffset={verticalOffset}em>" +
+                $"<indent={config.MedicineHudIndent}%>" +
+                $"<color={color}>Ð¡Ð¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ Ð±Ñ€Ð¾Ð½ÐµÐ¶Ð¸Ð»ÐµÑ‚Ð°: " +
+                $"{percentageText}</color>";
+        }
+
+        private static string InterpolateColor(float percentage)
+        {
+            float interpolation = percentage / 100f;
+
+            int red =
+                (int)(255 + (107 - 255) * interpolation);
+
+            int green =
+                (int)(170 * interpolation);
+
+            int blue =
+                (int)(204 * interpolation);
+
+            red = ClampByte(red);
+            green = ClampByte(green);
+            blue = ClampByte(blue);
+
+            return $"#{red:X2}{green:X2}{blue:X2}";
+        }
+
+        private static int ClampByte(int value)
+        {
+            if (value < 0)
+                return 0;
+
+            if (value > 255)
+                return 255;
+
+            return value;
+        }
+    }
+}
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Exiled.API.Features;
+
+namespace EventHUD.Medicine
+{
+    /// <summary>
+    /// Ð¡Ñ‚Ñ€Ð¾ÐºÐ° "Ð¡Ð¾ÑÑ‚Ð¾ÑÐ½Ð¸Ðµ: ..." Ð² ÐºÐ°Ñ€Ñ‚Ð¾Ñ‡ÐºÐµ Ð¸Ð³Ñ€Ð¾ÐºÐ°.
+    /// Ð’ÑÑ Ð²Ñ‘Ñ€ÑÑ‚ÐºÐ° Ñ‡ÐµÑ€ÐµÐ· voffset, Ð±ÐµÐ· br.
+    /// </summary>
+    public static class MedicineHudSegment
+    {
+        private const int MaxPerLine = 3;
+
+        /// <summary>
+        /// Ð¡Ñ‚Ñ€Ð¾Ð¸Ñ‚ HUD-ÑÐµÐ³Ð¼ÐµÐ½Ñ‚ Ð¼ÐµÐ´Ð¸Ñ†Ð¸Ð½Ñ‹ Ñ Ð´Ð¸Ð½Ð°Ð¼Ð¸Ñ‡ÐµÑÐºÐ¸Ð¼ voffset.
+        /// </summary>
+        /// <param name="player">Ð˜Ð³Ñ€Ð¾Ðº</param>
+        /// <param name="c">ÐšÐ¾Ð½Ñ„Ð¸Ð³</param>
+        /// <param name="voffset1">Voffset Ð¿ÐµÑ€Ð²Ð¾Ð¹ ÑÑ‚Ñ€Ð¾ÐºÐ¸</param>
+        /// <param name="voffset2">Voffset Ð²Ñ‚Ð¾Ñ€Ð¾Ð¹ ÑÑ‚Ñ€Ð¾ÐºÐ¸ (ÐµÑÐ»Ð¸ Ð½ÑƒÐ¶Ð½Ð°)</param>
+        public static string Build(Player player, Config c, float voffset1, float voffset2, out int linesUsed)
+        {
+            if (!MedicalStorage.TryGet(player.UserId, out var state))
+            {
+                linesUsed = 1;
+                return BuildNormal(c, voffset1);
+            }
+
+            if (!state.HasAnything)
+            {
+                linesUsed = 1;
+                return BuildNormal(c, voffset1);
+            }
+
+            // Ð¡Ð¾Ð±Ð¸Ñ€Ð°ÐµÐ¼ Ð²ÑÐµ ÑÐ»ÐµÐ¼ÐµÐ½Ñ‚Ñ‹ Ð´Ð»Ñ Ð¾Ñ‚Ð¾Ð±Ñ€Ð°Ð¶ÐµÐ½Ð¸Ñ
+            var items = new List<HudItem>();
+
+            // Ð“Ð»Ð¾Ð±Ð°Ð»ÑŒÐ½Ñ‹Ðµ ÑÐ¾ÑÑ‚Ð¾ÑÐ½Ð¸Ñ (ÐºÑ€Ð¾Ð¼Ðµ Normal)
+            foreach (var cond in state.Conditions)
+            {
+                if (cond == GlobalCondition.Normal)
+                    continue;
+
+                items.Add(new HudItem
+                {
+                    Priority = cond.GetPriority(),
+                    Text     = $"<color={cond.GetColor()}>{cond.GetShortName()}</color>"
+                });
+            }
+
+            // Ð›Ð¾ÐºÐ°Ð»ÑŒÐ½Ñ‹Ðµ Ñ‚Ñ€Ð°Ð²Ð¼Ñ‹
+            foreach (var injury in state.Injuries)
+            {
+                items.Add(new HudItem
+                {
+                    Priority = injury.Type.GetPriority(),
+                    Text     = injury.ToHudString()
+                });
+            }
+
+            // Ð¡Ð¾Ñ€Ñ‚Ð¸Ñ€ÑƒÐµÐ¼ Ð¿Ð¾ Ð¿Ñ€Ð¸Ð¾Ñ€Ð¸Ñ‚ÐµÑ‚Ñƒ (ÑÐ°Ð¼Ñ‹Ðµ ÐºÑ€Ð¸Ñ‚Ð¸Ñ‡Ð½Ñ‹Ðµ Ð¿ÐµÑ€Ð²Ñ‹Ðµ)
+            items.Sort((a, b) => b.Priority.CompareTo(a.Priority));
+
+            if (items.Count == 0)
+            {
+                linesUsed = 1;
+                return BuildNormal(c, voffset1);
+            }
+
+            // â”€â”€ Ð¡Ñ‚Ñ€Ð¾ÐºÐ° 1 â”€â”€
+            int line1Count = System.Math.Min(items.Count, MaxPerLine);
+            var line1Items = items.Take(line1Count).ToList();
+            int remaining  = items.Count - line1Count;
+
+            var sb = new StringBuilder();
+            sb.Append($"<voffset={voffset1}em><indent={c.MedicineHudIndent}%>");
+            sb.Append($"{c.MedicineHudLabel}: ");
+            sb.Append(string.Join(" | ", line1Items.Select(i => i.Text)));
+
+            // â”€â”€ Ð¡Ñ‚Ñ€Ð¾ÐºÐ° 2 â€” ÐµÑÐ»Ð¸ Ð½ÑƒÐ¶Ð½Ð° â”€â”€
+            if (remaining > 0)
+            {
+                int line2Count = System.Math.Min(remaining, MaxPerLine);
+                var line2Items = items.Skip(line1Count).Take(line2Count).ToList();
+                int leftover   = items.Count - line1Count - line2Count;
+
+                sb.Append($"<voffset={voffset2}em><indent={c.MedicineHudIndent}%>");
+                sb.Append(string.Join(" | ", line2Items.Select(i => i.Text)));
+
+                if (leftover > 0)
+                    sb.Append($" | <color=#888888>+{leftover}</color>");
+            }
+
+            linesUsed = remaining > 0 ? 2 : 1;
+            return sb.ToString();
+        }
+
+        private static string BuildNormal(Config c, float voffset)
+        {
+            return $"<voffset={voffset}em><indent={c.MedicineHudIndent}%>" +
+                   $"{c.MedicineHudLabel}: <color=#ebffea>ÐÐ¾Ñ€Ð¼Ð°</color>";
+        }
+
+        private class HudItem
+        {
+            public int    Priority;
+            public string Text;
+        }
+    }
+}
+ 
+using System;
+using System.Collections.Generic;
+using System.Text;
+using Exiled.API.Features;
+
+namespace EventHUD.Medicine
+{
+    public static class MedkitHudSegment
+    {
+        private const int MaxVisible = 3;
+        private const int MaxCharsPerItem = 25;
+
+        // FIXED: now takes targetPlayer explicitly, so healing other shows patient's injuries, not doctor's
+        public static string Build(Player doctor, Player targetPlayer, MedkitInventory kit, Config c, float voffset)
+        {
+            if (kit == null) return BuildEmpty(c, voffset, null);
+
+            if (!MedicalStorage.TryGet(targetPlayer.UserId, out var medState))
+                return BuildEmpty(c, voffset, kit);
+
+            bool isHealingOther = doctor.Id != targetPlayer.Id;
+            var menuState = MedkitStorage.GetOrCreate(doctor.UserId);
+            var items = MedkitMenuBuilder.Build(medState, c, kit, isHealingOther);
+
+            if (items.Count == 0)
+                return BuildEmpty(c, voffset, kit);
+
+            if (menuState.SelectedIndex >= items.Count)
+                menuState.SelectedIndex = 0;
+            if (menuState.SelectedIndex < 0)
+                menuState.SelectedIndex = items.Count - 1;
+
+            if (menuState.IsHealing && menuState.HealingItem != null)
+                return BuildHealing(menuState, c, voffset);
+
+            if (menuState.ShowInventory)
+                return BuildInventoryView(c, voffset, kit);
+
+            return BuildConveyor(items, menuState.SelectedIndex, c, voffset, kit);
+        }
+
+        // Legacy overload for self-heal (keeps old calls compiling)
+        public static string Build(Player player, Config c, float voffset)
+        {
+            if (player.CurrentItem == null || player.CurrentItem.Type != ItemType.Medkit)
+                return string.Empty;
+            ushort serial = player.CurrentItem.Serial;
+            var kit = MedkitInventoryStorage.GetOrCreate(serial);
+            return Build(player, player, kit, c, voffset);
+        }
+
+        private static string BuildConveyor(List<MedkitMenuItem> items, int selected, Config c, float voffset, MedkitInventory kit)
+        {
+            var sb = new StringBuilder();
+            sb.Append($"<voffset={voffset}em><indent={c.MedicineHudIndent}%>");
+            string kitShort = kit.Type switch
+            {
+                MedkitType.Civilian => "Ð“Ñ€Ð°Ð¶Ð´",
+                MedkitType.Industrial => "Ð Ð°Ð±Ð¾Ñ‡",
+                MedkitType.Military => "Ð’Ð¾ÐµÐ½",
+                MedkitType.Paramedic => "ÐŸÐ°Ñ€Ð°Ð¼",
+                _ => "ÐÐ¿Ñ‚"
+            };
+            sb.Append($"<color=#888888>{kitShort}: </color>");
+            var visible = GetVisibleItems(items, selected);
+            for (int i = 0; i < visible.Count; i++)
+            {
+                if (i > 0) sb.Append("<color=#555555>|</color>");
+                var (item, isSelected) = visible[i];
+                sb.Append(FormatItemShort(item, isSelected));
+            }
+            return sb.ToString();
+        }
+
+        private static List<(MedkitMenuItem item, bool isSelected)> GetVisibleItems(List<MedkitMenuItem> items, int selected)
+        {
+            var result = new List<(MedkitMenuItem, bool)>();
+            if (items.Count <= MaxVisible)
+            {
+                for (int i = 0; i < items.Count; i++) result.Add((items[i], i == selected));
+                return result;
+            }
+            int prev = (selected - 1 + items.Count) % items.Count;
+            int next = (selected + 1) % items.Count;
+            result.Add((items[prev], false));
+            result.Add((items[selected], true));
+            result.Add((items[next], false));
+            return result;
+        }
+
+        private static string FormatItemShort(MedkitMenuItem item, bool isSelected)
+        {
+            if (item.IsInventoryView)
+            {
+                string clr = isSelected ? "#00FF00" : "#888888";
+                return $"<color={clr}>[Ð¡Ð¾Ð´ÐµÑ€Ð¶.]</color>";
+            }
+            if (item.IsBack)
+            {
+                string clr = isSelected ? "#FF5555" : "#AA4444";
+                return $"<color={clr}>â† ÐÐ°Ð·Ð°Ð´</color>";
+            }
+            string shortName = ShortenName(item.DisplayName);
+            if (!item.CanHeal)
+            {
+                // Ð¡ÐµÑ€Ñ‹Ð¼ + Ð¿Ñ€Ð¸Ñ‡Ð¸Ð½Ð°, ÐµÑÐ»Ð¸ ÐµÑÑ‚ÑŒ Ð¼ÐµÑÑ‚Ð¾
+                string reason = string.IsNullOrEmpty(item.CannotHealReason) ? "" : $" [{item.CannotHealReason}]";
+                // ÐžÐ±Ñ€ÐµÐ·Ð°ÐµÐ¼ Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð²Ð»ÐµÐ·Ð»Ð¾
+                int maxLen = MaxCharsPerItem - reason.Length;
+                if (maxLen < 5) reason = "";
+                if (shortName.Length > maxLen && maxLen > 0)
+                    shortName = shortName.Substring(0, maxLen);
+                return $"<color=#888888>{shortName}{reason}</color>";
+            }
+            string color = item.IsFirstAid ? "#FFAA00" : (isSelected ? "#00FF00" : "#888888");
+            string prefix = item.IsFirstAid ? "ÐŸÐŸ " : "";
+            return $"<color={color}>{prefix}{shortName} {item.TimeLabel}</color>";
+        }
+
+        private static string ShortenName(string name)
+        {
+            if (name.Length <= MaxCharsPerItem) return name;
+            name = name.Replace("ÐšÑ€Ð¾Ð²Ð¾Ñ‚ÐµÑ‡ÐµÐ½Ð¸Ðµ", "ÐšÑ€Ð¾Ð².")
+                       .Replace("ÐžÐ³Ð½ÐµÑÑ‚Ñ€ÐµÐ»", "ÐžÐ³Ð½.")
+                       .Replace("ÐÐ¾Ð¶ÐµÐ²Ð°Ñ", "ÐÐ¾Ð¶.")
+                       .Replace("Ð¥Ð¸Ð¼Ð¸Ñ‡ÐµÑÐºÐ°Ñ", "Ð¥Ð¸Ð¼.")
+                       .Replace("ÐšÐ¾Ñ€Ñ€Ð¾Ð·Ð¸Ñ", "ÐšÐ¾Ñ€Ñ€.")
+                       .Replace("ÐŸÐµÑ€ÐµÐ»Ð¾Ð¼", "ÐŸÐµÑ€ÐµÐ».")
+                       .Replace("ÐŸÐµÑ€ÐµÐ´Ð¾Ð· Ð°Ð´Ñ€ÐµÐ½Ð°Ð»Ð¸Ð½Ð¾Ð¼", "ÐŸ.ÐÐ´Ñ€.")
+                       .Replace("ÐŸÐµÑ€ÐµÐ´Ð¾Ð· Ð¾Ð±ÐµÐ·Ð±Ð¾Ð»Ð¾Ð¼", "ÐŸ.ÐžÐ±ÐµÐ·Ð±.")
+                       .Replace("ÐžÑÑ‚Ð°Ð½Ð¾Ð²ÐºÐ° ÑÐµÑ€Ð´Ñ†Ð°", "ÐžÑÑ‚.ÑÐµÑ€Ð´.");
+            if (name.Length > MaxCharsPerItem) name = name.Substring(0, MaxCharsPerItem - 2) + "..";
+            return name;
+        }
+
+        private static string BuildHealing(MedkitMenuState menuState, Config c, float voffset)
+        {
+            var item = menuState.HealingItem;
+            if (item.Stages.Count == 0) return string.Empty;
+            int stageIdx = menuState.CurrentStage;
+            if (stageIdx >= item.Stages.Count) stageIdx = item.Stages.Count - 1;
+            var stage = item.Stages[stageIdx];
+            float elapsed = menuState.HealElapsed;
+            float total = stage.Duration;
+            float progress = Math.Min(elapsed / Math.Max(total, 0.1f), 1f);
+            int filled = (int)(progress * 10);
+            string bar = new string('â–ˆ', filled) + new string('â–‘', 10 - filled);
+            string label = item.Stages.Count > 1 ? $"{stageIdx + 1}/{item.Stages.Count} {stage.Name}" : stage.Name;
+            return $"<voffset={voffset}em><indent={c.MedicineHudIndent}%><color=#00FF00>{label} {bar} {elapsed:0}/{total:0}Ñ</color>";
+        }
+
+        private static string BuildInventoryView(Config c, float voffset, MedkitInventory kit)
+        {
+            var items = new List<string>();
+            if (kit.Bandages > 0) items.Add($"Ð‘:{kit.Bandages}");
+            if (kit.Tourniquets > 0) items.Add($"Ð–:{kit.Tourniquets}");
+            if (kit.HemostaticPads > 0) items.Add($"Ð“:{kit.HemostaticPads}");
+            if (kit.ColdPacks > 0) items.Add($"Ð¥:{kit.ColdPacks}");
+            if (kit.Splints > 0) items.Add($"Ð¨:{kit.Splints}");
+            if (kit.Antiseptic > 0) items.Add($"Ð:{kit.Antiseptic}");
+            if (kit.Saline > 0) items.Add($"Ð¤:{kit.Saline}");
+            if (kit.Painkillers > 0) items.Add($"Ðž:{kit.Painkillers}");
+            if (kit.Morphine > 0) items.Add($"Ðœ:{kit.Morphine}");
+            if (kit.Adrenaline > 0) items.Add($"ÐÐ´:{kit.Adrenaline}");
+            if (kit.Atropine > 0) items.Add($"ÐÑ‚:{kit.Atropine}");
+            if (kit.DefibCharges > 0) items.Add($"Ð”:{kit.DefibCharges}");
+            if (kit.SurgicalKits > 0) items.Add($"Ð¥Ñ€:{kit.SurgicalKits}");
+            if (kit.OcclusivePads > 0) items.Add($"ÐžÐº:{kit.OcclusivePads}");
+            var sb = new StringBuilder();
+            sb.Append($"<voffset={voffset}em><indent={c.MedicineHudIndent}%>");
+            sb.Append($"<color=red>â†ÐÐ°Ð·Ð°Ð´</color> <color=#555555>|</color> ");
+            sb.Append($"<color={kit.Type.GetColor()}>{kit.Type.GetDisplayName()}</color>");
+            if (items.Count == 0) { sb.Append(" <color=#888888>ÐŸÑƒÑÑ‚Ð¾</color>"); return sb.ToString(); }
+
+            // ÐœÐ°ÐºÑÐ¸Ð¼ÑƒÐ¼ 2 ÑÑ‚Ñ€Ð¾ÐºÐ¸ ÑÐ¾Ð´ÐµÑ€Ð¶Ð¸Ð¼Ð¾Ð³Ð¾, Ð¿Ð¾Ñ‚Ð¾Ð¼ +N
+            int perLine = 7;
+            int maxLines = 2;
+            int maxShown = perLine * maxLines;
+            int shown = Math.Min(items.Count, maxShown);
+
+            float lineVoff = voffset - 1f;
+            for (int i = 0; i < shown; i += perLine)
+            {
+                int count = Math.Min(perLine, shown - i);
+                sb.Append($"<voffset={lineVoff}em><indent={c.MedicineHudIndent}%>");
+                sb.Append(string.Join(" ", items.GetRange(i, count)));
+                lineVoff -= 1f;
+            }
+            if (items.Count > maxShown) sb.Append($" +{items.Count - maxShown}");
+            return sb.ToString();
+        }
+
+        private static string BuildEmpty(Config c, float voffset, MedkitInventory kit)
+        {
+            return $"<voffset={voffset}em><indent={c.MedicineHudIndent}%> <color=#888888>ÐÐµÑ‡ÐµÐ³Ð¾ Ð»ÐµÑ‡Ð¸Ñ‚ÑŒ</color>";
+        }
+    }
+}
+using System;
+using System.Collections.Generic;
+using Exiled.API.Features;
+
+namespace EventHUD.Hud
+{
+    /// <summary>
+    /// Ð•Ð´Ð¸Ð½Ð°Ñ Ñ‚Ð¾Ñ‡ÐºÐ° Ð´Ð»Ñ Ð²ÑÐµÑ… Ð²Ñ€ÐµÐ¼ÐµÐ½Ð½Ñ‹Ñ… ÑƒÐ²ÐµÐ´Ð¾Ð¼Ð»ÐµÐ½Ð¸Ð¹ Ð¿Ð¾Ð²ÐµÑ€Ñ… HUD.
+    /// Ð—Ð°Ð¼ÐµÐ½ÑÐµÑ‚ Ð¿Ñ€ÑÐ¼Ñ‹Ðµ Ð²Ñ‹Ð·Ð¾Ð²Ñ‹ player.ShowHint, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð½Ðµ Ð±Ñ‹Ð»Ð¾ ÐºÐ¾Ð½Ñ„Ð»Ð¸ÐºÑ‚Ð¾Ð²
+    /// Ñ Ð¾ÑÐ½Ð¾Ð²Ð½Ñ‹Ð¼ HUD â€” Ð²ÑÑ‘ Ñ€Ð¸ÑÑƒÐµÑ‚ÑÑ Ð² Ð¾Ð´Ð½Ð¾Ð¼ Ñ…Ð¸Ð½Ñ‚Ðµ.
+    /// </summary>
+    public static class HudNoticeService
+    {
+        private class Notice
+        {
+            public string   Text;
+            public DateTime ExpiresAt;
+        }
+
+        private static readonly Dictionary<string, Notice> _notices = new();
+
+        public static void Show(Player player, string text, float duration)
+        {
+            if (player == null || string.IsNullOrEmpty(text))
+                return;
+
+            _notices[player.UserId] = new Notice
+            {
+                Text      = text,
+                ExpiresAt = DateTime.UtcNow.AddSeconds(duration)
+            };
+        }
+
+        public static string GetActive(Player player)
+        {
+            if (player == null || !_notices.TryGetValue(player.UserId, out var notice))
+                return null;
+
+            if (DateTime.UtcNow >= notice.ExpiresAt)
+            {
+                _notices.Remove(player.UserId);
+                return null;
+            }
+
+            return notice.Text;
+        }
+
+        public static void Clear(string userId)
+        {
+            if (!string.IsNullOrEmpty(userId))
+                _notices.Remove(userId);
+        }
+
+        public static void Reset() => _notices.Clear();
+    }
+}
+using System.Collections.Generic;
+using Exiled.API.Features;
+
+namespace EventHUD.Hud
+{
+    public static class HudToggleService
+    {
+        private static readonly HashSet<string> Overrides    = new HashSet<string>();
+        private static          bool            _enabledByDefault = true;
+
+        public static void Initialize(bool enabledByDefault)
+        {
+            _enabledByDefault = enabledByDefault;
+            Overrides.Clear();
+        }
+
+        public static bool IsEnabled(Player player)
+        {
+            if (player == null)
+                return false;
+
+            return _enabledByDefault
+                ? !Overrides.Contains(player.UserId)
+                :  Overrides.Contains(player.UserId);
+        }
+
+        public static bool Toggle(string userId)
+        {
+            if (Overrides.Contains(userId))
+            {
+                Overrides.Remove(userId);
+                return _enabledByDefault;
+            }
+
+            Overrides.Add(userId);
+            return !_enabledByDefault;
+        }
+
+        public static void SetReloaded(string userId)
+        {
+            Overrides.Remove(userId);
+        }
+
+        public static void Clear(string userId)
+        {
+            if (!string.IsNullOrEmpty(userId))
+                Overrides.Remove(userId);
+        }
+
+        public static void Reset() => Overrides.Clear();
+    }
+}
+using System;
+using System.Collections.Generic;
+using EventHUD.Enums;
+using MEC;
+
+namespace EventHUD.Hud
+{
+    public class EffectScheduler
+    {
+        public EffectState State { get; } = new EffectState();
+
+        private readonly Config _config;
+        private CoroutineHandle _minutePulseHandle;
+        private CoroutineHandle _flashHandle;
+        private CoroutineHandle _hostReturnHandle;
+
+        public EffectScheduler(Config config) => _config = config;
+
+        public void Start()
+        {
+            _minutePulseHandle = Timing.RunCoroutine(MinutePulseLoop());
+            _flashHandle       = Timing.RunCoroutine(FlashLoop());
+            _hostReturnHandle  = Timing.RunCoroutine(HostReturnLoop());
+        }
+
+        public void Stop() =>
+            Timing.KillCoroutines(_minutePulseHandle, _flashHandle, _hostReturnHandle);
+
+        private IEnumerator<float> MinutePulseLoop()
+        {
+            while (true)
+            {
+                yield return Timing.WaitForSeconds(_config.MinutePulseIntervalSeconds);
+
+                if (EventManager.Instance?.Session?.State == EventState.None)
+                    continue;
+
+                if (State.IsFlashActive)
+                    continue;
+
+                yield return Timing.WaitUntilDone(RunPulseCycle(
+                    _config.MinutePulseDuration,
+                    active   => State.IsMinutePulseActive = active,
+                    progress => State.MinutePulseProgress = progress));
+            }
+        }
+
+        private IEnumerator<float> FlashLoop()
+        {
+            while (true)
+            {
+                yield return Timing.WaitForSeconds(_config.ColorFlashIntervalSeconds);
+
+                if (EventManager.Instance?.Session?.State != EventState.Running)
+                    continue;
+
+                yield return Timing.WaitUntilDone(RunPulseCycle(
+                    _config.ColorFlashDuration,
+                    active   => State.IsFlashActive  = active,
+                    progress => State.FlashProgress  = progress));
+            }
+        }
+
+        private IEnumerator<float> RunPulseCycle(
+            float         duration,
+            Action<bool>  setActive,
+            Action<float> setProgress)
+        {
+            setActive(true);
+
+            float stepInterval = duration / Math.Max(1, _config.EffectColorSteps);
+            float half         = duration / 2f;
+            float elapsed      = 0f;
+
+            // ÐÐ°Ñ€Ð°ÑÑ‚Ð°Ð½Ð¸Ðµ
+            while (elapsed < half)
+            {
+                setProgress(EasingUtils.SmoothStep(elapsed / half));
+                elapsed += stepInterval;
+                yield return Timing.WaitForSeconds(stepInterval);
+            }
+
+            elapsed = 0f;
+
+            // Ð¡Ð¿Ð°Ð´
+            while (elapsed < half)
+            {
+                setProgress(EasingUtils.SmoothStep(1f - elapsed / half));
+                elapsed += stepInterval;
+                yield return Timing.WaitForSeconds(stepInterval);
+            }
+
+            setProgress(0f);
+            setActive(false);
+        }
+
+        private IEnumerator<float> HostReturnLoop()
+        {
+            while (true)
+            {
+                yield return Timing.WaitForSeconds(0.5f);
+
+                var session = EventManager.Instance.Session;
+
+                if (session.ShowHostReturnHighlight &&
+                    (DateTime.UtcNow - session.HostReturnedAt).TotalSeconds
+                    >= _config.HostReturnHighlightDuration)
+                {
+                    session.ShowHostReturnHighlight = false;
+                }
+            }
+        }
+    }
+}
+ 
+using System.Text.RegularExpressions;
+using EventHUD.Extensions;
+
+namespace EventHUD.Hud
+{
+    public static class EffectApplier
+    {
+        public static string ApplyColorOverlay(
+            string richText,
+            float  progress,
+            string targetColorHex)
+        {
+            if (progress <= 0.001f)
+                return richText;
+
+            string hex           = InterpolateColor("FFFFFF", targetColorHex, progress);
+            string withoutColors = Regex.Replace(richText, "<color=.*?>|</color>", "");
+
+            return $"<color=#{hex}>{withoutColors}</color>";
+        }
+
+        private static string InterpolateColor(string fromHex, string toHex, float t)
+        {
+            var (r1, g1, b1) = fromHex.HexToRgb();
+            var (r2, g2, b2) = toHex.HexToRgb();
+
+            int r = (int)(r1 + (r2 - r1) * t);
+            int g = (int)(g1 + (g2 - g1) * t);
+            int b = (int)(b1 + (b2 - b1) * t);
+
+            return $"{r:X2}{g:X2}{b:X2}";
+        }
+    }
+}
+ 
+namespace EventHUD.Hud
+{
+    public class EffectState
+    {
+        public bool  IsMinutePulseActive { get; set; }
+        public float MinutePulseProgress { get; set; }
+
+        public bool  IsFlashActive       { get; set; }
+        public float FlashProgress       { get; set; }
+    }
+}
+ 
+namespace EventHUD.Hud
+{
+    public static class EasingUtils
+    {
+        public static float SmoothStep(float t)
+        {
+            t = Clamp01(t);
+            return t * t * (3f - 2f * t);
+        }
+
+        public static float Clamp01(float value)
+        {
+            if (value < 0f) return 0f;
+            if (value > 1f) return 1f;
+            return value;
+        }
+    }
+}
+ 
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using EventHUD.Scp;
+using Exiled.API.Features;
+using MEC;
+using PlayerRoles;
+using UnityEngine;
+using UserSettings.ServerSpecific;
+
+namespace EventHUD.Hud
+{
+    public static class SssRoleSync
+    {
+        public static readonly List<ServerSpecificSettingBase>
+            HumanSettings =
+                new List<ServerSpecificSettingBase>();
+
+        public static readonly List<ServerSpecificSettingBase>
+            Scp049Settings =
+                new List<ServerSpecificSettingBase>();
+
+        public static readonly List<ServerSpecificSettingBase>
+            Scp106Settings =
+                new List<ServerSpecificSettingBase>();
+
+        public static readonly List<ServerSpecificSettingBase>
+            ScpSettings =
+                new List<ServerSpecificSettingBase>();
+
+        private const int ScpProximityKeybindId = 4901;
+
+        private static bool _initialized;
+
+        public static void Init()
+        {
+            if (_initialized)
+                return;
+
+            _initialized = true;
+
+            ScpSettings.Add(
+                new SSKeybindSetting(
+                    ScpProximityKeybindId,
+                    "Ð Ð°Ð·Ð³Ð¾Ð²Ð¾Ñ€ Ð·Ð° SCP",
+                    KeyCode.Z));
+
+            ServerSpecificSettingsSync.ServerOnSettingValueReceived +=
+                OnSettingValueReceived;
+
+            List<ServerSpecificSettingBase> all =
+                new List<ServerSpecificSettingBase>();
+
+            AddUnique(all, HumanSettings);
+            AddUnique(all, Scp049Settings);
+            AddUnique(all, Scp106Settings);
+            AddUnique(all, ScpSettings);
+
+            ServerSpecificSettingsSync.DefinedSettings =
+                all.ToArray();
+
+            ServerSpecificSettingsSync.SendOnJoinFilter =
+                hub => false;
+        }
+
+        public static void Shutdown()
+        {
+            if (!_initialized)
+                return;
+
+            _initialized = false;
+
+            ServerSpecificSettingsSync.ServerOnSettingValueReceived -=
+                OnSettingValueReceived;
+
+            ServerSpecificSettingsSync.SendOnJoinFilter = null;
+
+            HumanSettings.Clear();
+            Scp049Settings.Clear();
+            Scp106Settings.Clear();
+            ScpSettings.Clear();
+
+            ScpProximityChat.Clear();
+        }
+
+        public static void SyncPlayer(Player player)
+        {
+            if (player == null ||
+                !player.IsConnected ||
+                player.ReferenceHub == null)
+            {
+                return;
+            }
+
+            ServerSpecificSettingBase[] settings;
+
+            switch (player.Role.Type)
+            {
+                case RoleTypeId.Scp049:
+                    settings = Scp049Settings
+                        .Concat(ScpSettings)
+                        .ToArray();
+                    break;
+
+                case RoleTypeId.Scp106:
+                    settings = Scp106Settings
+                        .Concat(ScpSettings)
+                        .ToArray();
+                    break;
+
+                default:
+                    if (player.Role.Team == Team.SCPs)
+                    {
+                        settings = ScpSettings.ToArray();
+                    }
+                    else
+                    {
+                        ScpProximityChat.Disable(player);
+                        settings = HumanSettings.ToArray();
+                    }
+
+                    break;
+            }
+
+            ServerSpecificSettingsSync.SendToPlayer(
+                player.ReferenceHub,
+                settings);
+        }
+
+        public static void OnChangingRole(
+            Exiled.Events.EventArgs.Player.ChangingRoleEventArgs ev)
+        {
+            Player player = ev.Player;
+
+            Timing.CallDelayed(
+                0.6f,
+                () => SyncPlayer(player));
+        }
+
+        public static void OnVerified(
+            Exiled.Events.EventArgs.Player.VerifiedEventArgs ev)
+        {
+            Player player = ev.Player;
+
+            Timing.CallDelayed(
+                1f,
+                () => SyncPlayer(player));
+        }
+
+        private static void OnSettingValueReceived(
+            ReferenceHub hub,
+            ServerSpecificSettingBase setting)
+        {
+            if (!(setting is SSKeybindSetting keybind) ||
+                keybind.SettingId != ScpProximityKeybindId ||
+                !keybind.SyncIsPressed)
+            {
+                return;
+            }
+
+            Player player = Player.Get(hub);
+
+            if (player == null ||
+                !player.IsAlive ||
+                !player.IsScp)
+            {
+                return;
+            }
+
+            bool enabled =
+                ScpProximityChat.Toggle(player);
+
+            HudNoticeService.Show(
+                player,
+                enabled
+                    ? "<color=#4CAF50>ÐŸÑ€Ð¾ÐºÑÐ¸-Ñ‡Ð°Ñ‚ SCP: Ð’ÐšÐ›</color>"
+                    : "<color=#F44336>ÐŸÑ€Ð¾ÐºÑÐ¸-Ñ‡Ð°Ñ‚ SCP: Ð’Ð«ÐšÐ›</color>",
+                2f);
+        }
+
+        private static void AddUnique(
+            List<ServerSpecificSettingBase> target,
+            IEnumerable<ServerSpecificSettingBase> source)
+        {
+            foreach (ServerSpecificSettingBase setting in source)
+            {
+                if (!target.Contains(setting))
+                    target.Add(setting);
+            }
+        }
+    }
+}
+using System;
+using System.Globalization;
+using System.Linq;
+using CommandSystem;
+using EventHUD.Hud;
+using Exiled.API.Features;
+using Exiled.Permissions.Extensions;
+
+namespace EventHUD.Commands
+{
+    [CommandHandler(typeof(RemoteAdminCommandHandler))]
+    public class HintBroadcastCommand : ICommand
+    {
+        public string Command => "hbc";
+        public string[] Aliases => new[] { "hintbroadcast", "hbroadcast" };
+        public string Description => "hbc [durationSeconds] <text>";
+
+        public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+        {
+            if (!sender.CheckPermission("eventhud.manage"))
+            {
+                response = "ÐÐµÑ‚ Ð¿Ñ€Ð°Ð².";
+                return false;
+            }
+
+            if (arguments.Count == 0)
+            {
+                response = "hbc [durationSeconds] <text>";
+                return false;
+            }
+
+            float duration = 10f;
+            int textStartIndex = 0;
+
+            if (TryParseFloat(arguments.At(0), out float parsedDuration))
+            {
+                duration = Math.Max(0.1f, parsedDuration);
+                textStartIndex = 1;
+            }
+
+            if (arguments.Count <= textStartIndex)
+            {
+                response = "ÐŸÐ¾ÑÐ»Ðµ Ð²Ñ€ÐµÐ¼ÐµÐ½Ð¸ ÑÐ°Ð¼ Ñ‚ÐµÐºÑÑ‚";
+                return false;
+            }
+
+            string text = string.Join(" ", arguments.Skip(textStartIndex))
+                .Replace("\\n", "\n");
+
+            int recipients = 0;
+            foreach (Player player in Player.List)
+            {
+                HudNoticeService.Show(player, text, duration);
+                recipients++;
+            }
+
+            response = $"Hint Ð¾Ñ‚Ð¿Ñ€Ð°Ð²Ð»ÐµÐ½ {recipients} Ð¸Ð³Ñ€Ð¾Ðº(Ð°Ð¼) Ð½Ð° {duration.ToString("0.##", CultureInfo.InvariantCulture)} ÑÐµÐº.";
+            return true;
+        }
+
+        private static bool TryParseFloat(string input, out float value)
+        {
+            return float.TryParse(input.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        }
+    }
+}
+ 
+using System;
+using CommandSystem;
+using EventHUD.Hud;
+using Exiled.API.Features;
+
+namespace EventHUD.Commands
+{
+    [CommandHandler(typeof(ClientCommandHandler))]
+    public class HudToggleCommand : ICommand
+    {
+        public string Command => "hud";
+        public string[] Aliases => new[] { "togglehud" };
+        public string Description => "Ð£Ð¿Ñ€Ð°Ð²Ð»ÐµÐ½Ð¸Ðµ HUD. .hud â€” Ð²ÐºÐ»/Ð²Ñ‹ÐºÐ», .hud rel â€” Ð¿ÐµÑ€ÐµÐ·Ð°Ð³Ñ€ÑƒÐ·Ð¸Ñ‚ÑŒ, .hud rem â€” ÑƒÐ±Ñ€Ð°Ñ‚ÑŒ";
+
+        public bool Execute(ArraySegment<string> arguments, ICommandSender sender, out string response)
+        {
+            Player player = Player.Get(sender);
+            if (player == null)
+            {
+                response = "Ð¢Ð¾Ð»ÑŒÐºÐ¾ Ð´Ð»Ñ Ð¸Ð³Ñ€Ð¾ÐºÐ¾Ð².";
+                return false;
+            }
+
+            string subCmd = arguments.Count > 0 ? arguments.At(0).ToLowerInvariant() : string.Empty;
+
+            switch (subCmd)
+            {
+                case "rel":
+                    HudToggleService.SetReloaded(player.UserId);
+                    response = "HUD Ð¿ÐµÑ€ÐµÐ·Ð°Ð³Ñ€ÑƒÐ¶ÐµÐ½.";
+                    return true;
+
+                case "rem":
+                    HudToggleService.Toggle(player.UserId);
+                    response = "HUD ÑƒÐ±Ñ€Ð°Ð½.";
+                    return true;
+
+                default:
+                    bool nowEnabled = HudToggleService.Toggle(player.UserId);
+                    response = nowEnabled ? "HUD Ð²ÐºÐ»ÑŽÑ‡Ñ‘Ð½." : "HUD Ð²Ñ‹ÐºÐ»ÑŽÑ‡ÐµÐ½.";
+                    return true;
+            }
+        }
+    }
+}
