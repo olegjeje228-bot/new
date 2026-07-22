@@ -1,0 +1,1186 @@
+{
+  "version": 3,
+  "targets": {
+    ".NETFramework,Version=v4.8": {
+      "Exiled.Dev.References/1.0.4": {
+        "type": "package",
+        "compile": {
+          "lib/net48/Assembly-CSharp-firstpass.dll": {},
+          "lib/net48/BouncyCastle.Cryptography.dll": {},
+          "lib/net48/Caress.dll": {},
+          "lib/net48/CommandSystem.Core.dll": {},
+          "lib/net48/DnsClient.dll": {},
+          "lib/net48/Facepunch.Steamworks.Win64.dll": {},
+          "lib/net48/Mirror.Components.dll": {},
+          "lib/net48/Mirror.dll": {},
+          "lib/net48/Mono.Cecil.Mdb.dll": {},
+          "lib/net48/Mono.Cecil.Pdb.dll": {},
+          "lib/net48/Mono.Cecil.Rocks.dll": {},
+          "lib/net48/Mono.Cecil.dll": {},
+          "lib/net48/Mono.Posix.dll": {},
+          "lib/net48/Mono.Security.dll": {},
+          "lib/net48/NorthwoodLib.dll": {},
+          "lib/net48/PluginAPI.dll": {},
+          "lib/net48/Pooling.dll": {},
+          "lib/net48/System.ComponentModel.Composition.dll": {},
+          "lib/net48/System.ComponentModel.DataAnnotations.dll": {},
+          "lib/net48/System.Configuration.dll": {},
+          "lib/net48/System.Core.dll": {},
+          "lib/net48/System.Data.DataSetExtensions.dll": {},
+          "lib/net48/System.Data.dll": {},
+          "lib/net48/System.Drawing.dll": {},
+          "lib/net48/System.EnterpriseServices.dll": {},
+          "lib/net48/System.IO.Compression.FileSystem.dll": {},
+          "lib/net48/System.IO.Compression.dll": {},
+          "lib/net48/System.Net.Http.dll": {},
+          "lib/net48/System.Numerics.dll": {},
+          "lib/net48/System.Runtime.CompilerServices.Unsafe.dll": {},
+          "lib/net48/System.Runtime.Serialization.dll": {},
+          "lib/net48/System.Runtime.dll": {},
+          "lib/net48/System.Security.dll": {},
+          "lib/net48/System.ServiceModel.Internals.dll": {},
+          "lib/net48/System.Transactions.dll": {},
+          "lib/net48/System.Xml.Linq.dll": {},
+          "lib/net48/System.Xml.dll": {},
+          "lib/net48/System.dll": {},
+          "lib/net48/Unity.Burst.Unsafe.dll": {},
+          "lib/net48/Unity.Burst.dll": {},
+          "lib/net48/Unity.Mathematics.dll": {},
+          "lib/net48/Unity.ProBuilder.Csg.dll": {},
+          "lib/net48/Unity.ProBuilder.KdTree.dll": {},
+          "lib/net48/Unity.ProBuilder.Poly2Tri.dll": {},
+          "lib/net48/Unity.ProBuilder.Stl.dll": {},
+          "lib/net48/Unity.ProBuilder.dll": {},
+          "lib/net48/Unity.RenderPipelines.Core.Runtime.dll": {},
+          "lib/net48/Unity.RenderPipelines.Core.ShaderLibrary.dll": {},
+          "lib/net48/Unity.RenderPipelines.HighDefinition.Config.Runtime.dll": {},
+          "lib/net48/Unity.RenderPipelines.HighDefinition.Runtime.dll": {},
+          "lib/net48/Unity.RenderPipelines.ShaderGraph.ShaderGraphLibrary.dll": {},
+          "lib/net48/Unity.TextMeshPro.dll": {},
+          "lib/net48/Unity.Timeline.dll": {},
+          "lib/net48/Unity.VisualEffectGraph.Runtime.dll": {},
+          "lib/net48/UnityEngine.AIModule.dll": {},
+          "lib/net48/UnityEngine.ARModule.dll": {},
+          "lib/net48/UnityEngine.AccessibilityModule.dll": {},
+          "lib/net48/UnityEngine.AndroidJNIModule.dll": {},
+          "lib/net48/UnityEngine.AnimationModule.dll": {},
+          "lib/net48/UnityEngine.AssetBundleModule.dll": {},
+          "lib/net48/UnityEngine.AudioModule.dll": {},
+          "lib/net48/UnityEngine.ClothModule.dll": {},
+          "lib/net48/UnityEngine.ClusterInputModule.dll": {},
+          "lib/net48/UnityEngine.ClusterRendererModule.dll": {},
+          "lib/net48/UnityEngine.CoreModule.dll": {},
+          "lib/net48/UnityEngine.CrashReportingModule.dll": {},
+          "lib/net48/UnityEngine.DSPGraphModule.dll": {},
+          "lib/net48/UnityEngine.DirectorModule.dll": {},
+          "lib/net48/UnityEngine.GIModule.dll": {},
+          "lib/net48/UnityEngine.GameCenterModule.dll": {},
+          "lib/net48/UnityEngine.GridModule.dll": {},
+          "lib/net48/UnityEngine.HotReloadModule.dll": {},
+          "lib/net48/UnityEngine.IMGUIModule.dll": {},
+          "lib/net48/UnityEngine.ImageConversionModule.dll": {},
+          "lib/net48/UnityEngine.InputLegacyModule.dll": {},
+          "lib/net48/UnityEngine.InputModule.dll": {},
+          "lib/net48/UnityEngine.JSONSerializeModule.dll": {},
+          "lib/net48/UnityEngine.LocalizationModule.dll": {},
+          "lib/net48/UnityEngine.NVIDIAModule.dll": {},
+          "lib/net48/UnityEngine.ParticleSystemModule.dll": {},
+          "lib/net48/UnityEngine.PerformanceReportingModule.dll": {},
+          "lib/net48/UnityEngine.Physics2DModule.dll": {},
+          "lib/net48/UnityEngine.PhysicsModule.dll": {},
+          "lib/net48/UnityEngine.ProfilerModule.dll": {},
+          "lib/net48/UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll": {},
+          "lib/net48/UnityEngine.ScreenCaptureModule.dll": {},
+          "lib/net48/UnityEngine.SharedInternalsModule.dll": {},
+          "lib/net48/UnityEngine.SpriteMaskModule.dll": {},
+          "lib/net48/UnityEngine.SpriteShapeModule.dll": {},
+          "lib/net48/UnityEngine.StreamingModule.dll": {},
+          "lib/net48/UnityEngine.SubstanceModule.dll": {},
+          "lib/net48/UnityEngine.SubsystemsModule.dll": {},
+          "lib/net48/UnityEngine.TLSModule.dll": {},
+          "lib/net48/UnityEngine.TerrainModule.dll": {},
+          "lib/net48/UnityEngine.TerrainPhysicsModule.dll": {},
+          "lib/net48/UnityEngine.TextCoreFontEngineModule.dll": {},
+          "lib/net48/UnityEngine.TextCoreTextEngineModule.dll": {},
+          "lib/net48/UnityEngine.TextRenderingModule.dll": {},
+          "lib/net48/UnityEngine.TilemapModule.dll": {},
+          "lib/net48/UnityEngine.UI.dll": {},
+          "lib/net48/UnityEngine.UIElementsModule.dll": {},
+          "lib/net48/UnityEngine.UIElementsNativeModule.dll": {},
+          "lib/net48/UnityEngine.UIModule.dll": {},
+          "lib/net48/UnityEngine.UNETModule.dll": {},
+          "lib/net48/UnityEngine.UmbraModule.dll": {},
+          "lib/net48/UnityEngine.UnityAnalyticsCommonModule.dll": {},
+          "lib/net48/UnityEngine.UnityAnalyticsModule.dll": {},
+          "lib/net48/UnityEngine.UnityConnectModule.dll": {},
+          "lib/net48/UnityEngine.UnityCurlModule.dll": {},
+          "lib/net48/UnityEngine.UnityTestProtocolModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestAssetBundleModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestAudioModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestTextureModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestWWWModule.dll": {},
+          "lib/net48/UnityEngine.VFXModule.dll": {},
+          "lib/net48/UnityEngine.VRModule.dll": {},
+          "lib/net48/UnityEngine.VehiclesModule.dll": {},
+          "lib/net48/UnityEngine.VideoModule.dll": {},
+          "lib/net48/UnityEngine.VirtualTexturingModule.dll": {},
+          "lib/net48/UnityEngine.WindModule.dll": {},
+          "lib/net48/UnityEngine.XRModule.dll": {},
+          "lib/net48/UnityEngine.dll": {},
+          "lib/net48/YamlDotNet.dll": {},
+          "lib/net48/mscorlib.dll": {},
+          "lib/net48/netstandard.dll": {},
+          "lib/net48/zxing.dll": {}
+        },
+        "runtime": {
+          "lib/net48/Assembly-CSharp-firstpass.dll": {},
+          "lib/net48/BouncyCastle.Cryptography.dll": {},
+          "lib/net48/Caress.dll": {},
+          "lib/net48/CommandSystem.Core.dll": {},
+          "lib/net48/DnsClient.dll": {},
+          "lib/net48/Facepunch.Steamworks.Win64.dll": {},
+          "lib/net48/Mirror.Components.dll": {},
+          "lib/net48/Mirror.dll": {},
+          "lib/net48/Mono.Cecil.Mdb.dll": {},
+          "lib/net48/Mono.Cecil.Pdb.dll": {},
+          "lib/net48/Mono.Cecil.Rocks.dll": {},
+          "lib/net48/Mono.Cecil.dll": {},
+          "lib/net48/Mono.Posix.dll": {},
+          "lib/net48/Mono.Security.dll": {},
+          "lib/net48/NorthwoodLib.dll": {},
+          "lib/net48/PluginAPI.dll": {},
+          "lib/net48/Pooling.dll": {},
+          "lib/net48/System.ComponentModel.Composition.dll": {},
+          "lib/net48/System.ComponentModel.DataAnnotations.dll": {},
+          "lib/net48/System.Configuration.dll": {},
+          "lib/net48/System.Core.dll": {},
+          "lib/net48/System.Data.DataSetExtensions.dll": {},
+          "lib/net48/System.Data.dll": {},
+          "lib/net48/System.Drawing.dll": {},
+          "lib/net48/System.EnterpriseServices.dll": {},
+          "lib/net48/System.IO.Compression.FileSystem.dll": {},
+          "lib/net48/System.IO.Compression.dll": {},
+          "lib/net48/System.Net.Http.dll": {},
+          "lib/net48/System.Numerics.dll": {},
+          "lib/net48/System.Runtime.CompilerServices.Unsafe.dll": {},
+          "lib/net48/System.Runtime.Serialization.dll": {},
+          "lib/net48/System.Runtime.dll": {},
+          "lib/net48/System.Security.dll": {},
+          "lib/net48/System.ServiceModel.Internals.dll": {},
+          "lib/net48/System.Transactions.dll": {},
+          "lib/net48/System.Xml.Linq.dll": {},
+          "lib/net48/System.Xml.dll": {},
+          "lib/net48/System.dll": {},
+          "lib/net48/Unity.Burst.Unsafe.dll": {},
+          "lib/net48/Unity.Burst.dll": {},
+          "lib/net48/Unity.Mathematics.dll": {},
+          "lib/net48/Unity.ProBuilder.Csg.dll": {},
+          "lib/net48/Unity.ProBuilder.KdTree.dll": {},
+          "lib/net48/Unity.ProBuilder.Poly2Tri.dll": {},
+          "lib/net48/Unity.ProBuilder.Stl.dll": {},
+          "lib/net48/Unity.ProBuilder.dll": {},
+          "lib/net48/Unity.RenderPipelines.Core.Runtime.dll": {},
+          "lib/net48/Unity.RenderPipelines.Core.ShaderLibrary.dll": {},
+          "lib/net48/Unity.RenderPipelines.HighDefinition.Config.Runtime.dll": {},
+          "lib/net48/Unity.RenderPipelines.HighDefinition.Runtime.dll": {},
+          "lib/net48/Unity.RenderPipelines.ShaderGraph.ShaderGraphLibrary.dll": {},
+          "lib/net48/Unity.TextMeshPro.dll": {},
+          "lib/net48/Unity.Timeline.dll": {},
+          "lib/net48/Unity.VisualEffectGraph.Runtime.dll": {},
+          "lib/net48/UnityEngine.AIModule.dll": {},
+          "lib/net48/UnityEngine.ARModule.dll": {},
+          "lib/net48/UnityEngine.AccessibilityModule.dll": {},
+          "lib/net48/UnityEngine.AndroidJNIModule.dll": {},
+          "lib/net48/UnityEngine.AnimationModule.dll": {},
+          "lib/net48/UnityEngine.AssetBundleModule.dll": {},
+          "lib/net48/UnityEngine.AudioModule.dll": {},
+          "lib/net48/UnityEngine.ClothModule.dll": {},
+          "lib/net48/UnityEngine.ClusterInputModule.dll": {},
+          "lib/net48/UnityEngine.ClusterRendererModule.dll": {},
+          "lib/net48/UnityEngine.CoreModule.dll": {},
+          "lib/net48/UnityEngine.CrashReportingModule.dll": {},
+          "lib/net48/UnityEngine.DSPGraphModule.dll": {},
+          "lib/net48/UnityEngine.DirectorModule.dll": {},
+          "lib/net48/UnityEngine.GIModule.dll": {},
+          "lib/net48/UnityEngine.GameCenterModule.dll": {},
+          "lib/net48/UnityEngine.GridModule.dll": {},
+          "lib/net48/UnityEngine.HotReloadModule.dll": {},
+          "lib/net48/UnityEngine.IMGUIModule.dll": {},
+          "lib/net48/UnityEngine.ImageConversionModule.dll": {},
+          "lib/net48/UnityEngine.InputLegacyModule.dll": {},
+          "lib/net48/UnityEngine.InputModule.dll": {},
+          "lib/net48/UnityEngine.JSONSerializeModule.dll": {},
+          "lib/net48/UnityEngine.LocalizationModule.dll": {},
+          "lib/net48/UnityEngine.NVIDIAModule.dll": {},
+          "lib/net48/UnityEngine.ParticleSystemModule.dll": {},
+          "lib/net48/UnityEngine.PerformanceReportingModule.dll": {},
+          "lib/net48/UnityEngine.Physics2DModule.dll": {},
+          "lib/net48/UnityEngine.PhysicsModule.dll": {},
+          "lib/net48/UnityEngine.ProfilerModule.dll": {},
+          "lib/net48/UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll": {},
+          "lib/net48/UnityEngine.ScreenCaptureModule.dll": {},
+          "lib/net48/UnityEngine.SharedInternalsModule.dll": {},
+          "lib/net48/UnityEngine.SpriteMaskModule.dll": {},
+          "lib/net48/UnityEngine.SpriteShapeModule.dll": {},
+          "lib/net48/UnityEngine.StreamingModule.dll": {},
+          "lib/net48/UnityEngine.SubstanceModule.dll": {},
+          "lib/net48/UnityEngine.SubsystemsModule.dll": {},
+          "lib/net48/UnityEngine.TLSModule.dll": {},
+          "lib/net48/UnityEngine.TerrainModule.dll": {},
+          "lib/net48/UnityEngine.TerrainPhysicsModule.dll": {},
+          "lib/net48/UnityEngine.TextCoreFontEngineModule.dll": {},
+          "lib/net48/UnityEngine.TextCoreTextEngineModule.dll": {},
+          "lib/net48/UnityEngine.TextRenderingModule.dll": {},
+          "lib/net48/UnityEngine.TilemapModule.dll": {},
+          "lib/net48/UnityEngine.UI.dll": {},
+          "lib/net48/UnityEngine.UIElementsModule.dll": {},
+          "lib/net48/UnityEngine.UIElementsNativeModule.dll": {},
+          "lib/net48/UnityEngine.UIModule.dll": {},
+          "lib/net48/UnityEngine.UNETModule.dll": {},
+          "lib/net48/UnityEngine.UmbraModule.dll": {},
+          "lib/net48/UnityEngine.UnityAnalyticsCommonModule.dll": {},
+          "lib/net48/UnityEngine.UnityAnalyticsModule.dll": {},
+          "lib/net48/UnityEngine.UnityConnectModule.dll": {},
+          "lib/net48/UnityEngine.UnityCurlModule.dll": {},
+          "lib/net48/UnityEngine.UnityTestProtocolModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestAssetBundleModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestAudioModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestTextureModule.dll": {},
+          "lib/net48/UnityEngine.UnityWebRequestWWWModule.dll": {},
+          "lib/net48/UnityEngine.VFXModule.dll": {},
+          "lib/net48/UnityEngine.VRModule.dll": {},
+          "lib/net48/UnityEngine.VehiclesModule.dll": {},
+          "lib/net48/UnityEngine.VideoModule.dll": {},
+          "lib/net48/UnityEngine.VirtualTexturingModule.dll": {},
+          "lib/net48/UnityEngine.WindModule.dll": {},
+          "lib/net48/UnityEngine.XRModule.dll": {},
+          "lib/net48/UnityEngine.dll": {},
+          "lib/net48/YamlDotNet.dll": {},
+          "lib/net48/mscorlib.dll": {},
+          "lib/net48/netstandard.dll": {},
+          "lib/net48/zxing.dll": {}
+        }
+      },
+      "ExMod.Exiled/9.14.2": {
+        "type": "package",
+        "compile": {
+          "lib/net48/Assembly-CSharp-Publicized.dll": {},
+          "lib/net48/CommandSystem.Core.dll": {},
+          "lib/net48/Exiled.API.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.CreditTags.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.CustomItems.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.CustomRoles.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.Events.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.Loader.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.Permissions.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/LabApi.dll": {},
+          "lib/net48/NorthwoodLib.dll": {},
+          "lib/net48/YamlDotNet.dll": {}
+        },
+        "runtime": {
+          "lib/net48/Assembly-CSharp-Publicized.dll": {},
+          "lib/net48/CommandSystem.Core.dll": {},
+          "lib/net48/Exiled.API.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.CreditTags.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.CustomItems.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.CustomRoles.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.Events.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.Loader.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/Exiled.Permissions.dll": {
+            "related": ".xml"
+          },
+          "lib/net48/LabApi.dll": {},
+          "lib/net48/NorthwoodLib.dll": {},
+          "lib/net48/YamlDotNet.dll": {}
+        }
+      },
+      "Lib.Harmony/2.3.3": {
+        "type": "package",
+        "compile": {
+          "lib/net48/0Harmony.dll": {
+            "related": ".pdb;.xml"
+          }
+        },
+        "runtime": {
+          "lib/net48/0Harmony.dll": {
+            "related": ".pdb;.xml"
+          }
+        }
+      },
+      "Microsoft.Bcl.AsyncInterfaces/8.0.0": {
+        "type": "package",
+        "dependencies": {
+          "System.Threading.Tasks.Extensions": "4.5.4"
+        },
+        "compile": {
+          "lib/net462/Microsoft.Bcl.AsyncInterfaces.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net462/Microsoft.Bcl.AsyncInterfaces.dll": {
+            "related": ".xml"
+          }
+        },
+        "build": {
+          "buildTransitive/net462/_._": {}
+        }
+      },
+      "Newtonsoft.Json/13.0.4": {
+        "type": "package",
+        "compile": {
+          "lib/net45/Newtonsoft.Json.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net45/Newtonsoft.Json.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "System.Buffers/4.5.1": {
+        "type": "package",
+        "frameworkAssemblies": [
+          "mscorlib"
+        ],
+        "compile": {
+          "ref/net45/System.Buffers.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net461/System.Buffers.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "System.Memory/4.5.5": {
+        "type": "package",
+        "dependencies": {
+          "System.Buffers": "4.5.1",
+          "System.Numerics.Vectors": "4.5.0",
+          "System.Runtime.CompilerServices.Unsafe": "4.5.3"
+        },
+        "frameworkAssemblies": [
+          "System",
+          "mscorlib"
+        ],
+        "compile": {
+          "lib/net461/System.Memory.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net461/System.Memory.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "System.Numerics.Vectors/4.5.0": {
+        "type": "package",
+        "frameworkAssemblies": [
+          "System.Numerics",
+          "mscorlib"
+        ],
+        "compile": {
+          "ref/net46/System.Numerics.Vectors.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net46/System.Numerics.Vectors.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "System.Runtime.CompilerServices.Unsafe/6.0.0": {
+        "type": "package",
+        "frameworkAssemblies": [
+          "mscorlib"
+        ],
+        "compile": {
+          "lib/net461/System.Runtime.CompilerServices.Unsafe.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net461/System.Runtime.CompilerServices.Unsafe.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "System.Text.Encodings.Web/8.0.0": {
+        "type": "package",
+        "dependencies": {
+          "System.Buffers": "4.5.1",
+          "System.Memory": "4.5.5",
+          "System.Runtime.CompilerServices.Unsafe": "6.0.0"
+        },
+        "compile": {
+          "lib/net462/System.Text.Encodings.Web.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net462/System.Text.Encodings.Web.dll": {
+            "related": ".xml"
+          }
+        },
+        "build": {
+          "buildTransitive/net462/_._": {}
+        }
+      },
+      "System.Text.Json/8.0.5": {
+        "type": "package",
+        "dependencies": {
+          "Microsoft.Bcl.AsyncInterfaces": "8.0.0",
+          "System.Buffers": "4.5.1",
+          "System.Memory": "4.5.5",
+          "System.Runtime.CompilerServices.Unsafe": "6.0.0",
+          "System.Text.Encodings.Web": "8.0.0",
+          "System.Threading.Tasks.Extensions": "4.5.4",
+          "System.ValueTuple": "4.5.0"
+        },
+        "compile": {
+          "lib/net462/System.Text.Json.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net462/System.Text.Json.dll": {
+            "related": ".xml"
+          }
+        },
+        "build": {
+          "buildTransitive/net462/System.Text.Json.targets": {}
+        }
+      },
+      "System.Threading.Tasks.Extensions/4.5.4": {
+        "type": "package",
+        "dependencies": {
+          "System.Runtime.CompilerServices.Unsafe": "4.5.3"
+        },
+        "frameworkAssemblies": [
+          "mscorlib"
+        ],
+        "compile": {
+          "lib/net461/System.Threading.Tasks.Extensions.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net461/System.Threading.Tasks.Extensions.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "System.ValueTuple/4.5.0": {
+        "type": "package",
+        "frameworkAssemblies": [
+          "mscorlib"
+        ],
+        "compile": {
+          "ref/net47/System.ValueTuple.dll": {}
+        },
+        "runtime": {
+          "lib/net47/System.ValueTuple.dll": {
+            "related": ".xml"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Exiled.Dev.References/1.0.4": {
+      "sha512": "OcoAF1QfDT6AZVOZ9rKi5yTf5olVojOVHepYZarMhDEneoC5Nsx3oErql+COVfwUgSkFdYDfSrYm3LuF/b/gbA==",
+      "type": "package",
+      "path": "exiled.dev.references/1.0.4",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "docs/README.md",
+        "exiled.dev.references.1.0.4.nupkg.sha512",
+        "exiled.dev.references.nuspec",
+        "lib/net48/Assembly-CSharp-firstpass.dll",
+        "lib/net48/BouncyCastle.Cryptography.dll",
+        "lib/net48/Caress.dll",
+        "lib/net48/CommandSystem.Core.dll",
+        "lib/net48/DnsClient.dll",
+        "lib/net48/Facepunch.Steamworks.Win64.dll",
+        "lib/net48/Mirror.Components.dll",
+        "lib/net48/Mirror.dll",
+        "lib/net48/Mono.Cecil.Mdb.dll",
+        "lib/net48/Mono.Cecil.Pdb.dll",
+        "lib/net48/Mono.Cecil.Rocks.dll",
+        "lib/net48/Mono.Cecil.dll",
+        "lib/net48/Mono.Posix.dll",
+        "lib/net48/Mono.Security.dll",
+        "lib/net48/NorthwoodLib.dll",
+        "lib/net48/PluginAPI.dll",
+        "lib/net48/Pooling.dll",
+        "lib/net48/System.ComponentModel.Composition.dll",
+        "lib/net48/System.ComponentModel.DataAnnotations.dll",
+        "lib/net48/System.Configuration.dll",
+        "lib/net48/System.Core.dll",
+        "lib/net48/System.Data.DataSetExtensions.dll",
+        "lib/net48/System.Data.dll",
+        "lib/net48/System.Drawing.dll",
+        "lib/net48/System.EnterpriseServices.dll",
+        "lib/net48/System.IO.Compression.FileSystem.dll",
+        "lib/net48/System.IO.Compression.dll",
+        "lib/net48/System.Net.Http.dll",
+        "lib/net48/System.Numerics.dll",
+        "lib/net48/System.Runtime.CompilerServices.Unsafe.dll",
+        "lib/net48/System.Runtime.Serialization.dll",
+        "lib/net48/System.Runtime.dll",
+        "lib/net48/System.Security.dll",
+        "lib/net48/System.ServiceModel.Internals.dll",
+        "lib/net48/System.Transactions.dll",
+        "lib/net48/System.Xml.Linq.dll",
+        "lib/net48/System.Xml.dll",
+        "lib/net48/System.dll",
+        "lib/net48/Unity.Burst.Unsafe.dll",
+        "lib/net48/Unity.Burst.dll",
+        "lib/net48/Unity.Mathematics.dll",
+        "lib/net48/Unity.ProBuilder.Csg.dll",
+        "lib/net48/Unity.ProBuilder.KdTree.dll",
+        "lib/net48/Unity.ProBuilder.Poly2Tri.dll",
+        "lib/net48/Unity.ProBuilder.Stl.dll",
+        "lib/net48/Unity.ProBuilder.dll",
+        "lib/net48/Unity.RenderPipelines.Core.Runtime.dll",
+        "lib/net48/Unity.RenderPipelines.Core.ShaderLibrary.dll",
+        "lib/net48/Unity.RenderPipelines.HighDefinition.Config.Runtime.dll",
+        "lib/net48/Unity.RenderPipelines.HighDefinition.Runtime.dll",
+        "lib/net48/Unity.RenderPipelines.ShaderGraph.ShaderGraphLibrary.dll",
+        "lib/net48/Unity.TextMeshPro.dll",
+        "lib/net48/Unity.Timeline.dll",
+        "lib/net48/Unity.VisualEffectGraph.Runtime.dll",
+        "lib/net48/UnityEngine.AIModule.dll",
+        "lib/net48/UnityEngine.ARModule.dll",
+        "lib/net48/UnityEngine.AccessibilityModule.dll",
+        "lib/net48/UnityEngine.AndroidJNIModule.dll",
+        "lib/net48/UnityEngine.AnimationModule.dll",
+        "lib/net48/UnityEngine.AssetBundleModule.dll",
+        "lib/net48/UnityEngine.AudioModule.dll",
+        "lib/net48/UnityEngine.ClothModule.dll",
+        "lib/net48/UnityEngine.ClusterInputModule.dll",
+        "lib/net48/UnityEngine.ClusterRendererModule.dll",
+        "lib/net48/UnityEngine.CoreModule.dll",
+        "lib/net48/UnityEngine.CrashReportingModule.dll",
+        "lib/net48/UnityEngine.DSPGraphModule.dll",
+        "lib/net48/UnityEngine.DirectorModule.dll",
+        "lib/net48/UnityEngine.GIModule.dll",
+        "lib/net48/UnityEngine.GameCenterModule.dll",
+        "lib/net48/UnityEngine.GridModule.dll",
+        "lib/net48/UnityEngine.HotReloadModule.dll",
+        "lib/net48/UnityEngine.IMGUIModule.dll",
+        "lib/net48/UnityEngine.ImageConversionModule.dll",
+        "lib/net48/UnityEngine.InputLegacyModule.dll",
+        "lib/net48/UnityEngine.InputModule.dll",
+        "lib/net48/UnityEngine.JSONSerializeModule.dll",
+        "lib/net48/UnityEngine.LocalizationModule.dll",
+        "lib/net48/UnityEngine.NVIDIAModule.dll",
+        "lib/net48/UnityEngine.ParticleSystemModule.dll",
+        "lib/net48/UnityEngine.PerformanceReportingModule.dll",
+        "lib/net48/UnityEngine.Physics2DModule.dll",
+        "lib/net48/UnityEngine.PhysicsModule.dll",
+        "lib/net48/UnityEngine.ProfilerModule.dll",
+        "lib/net48/UnityEngine.RuntimeInitializeOnLoadManagerInitializerModule.dll",
+        "lib/net48/UnityEngine.ScreenCaptureModule.dll",
+        "lib/net48/UnityEngine.SharedInternalsModule.dll",
+        "lib/net48/UnityEngine.SpriteMaskModule.dll",
+        "lib/net48/UnityEngine.SpriteShapeModule.dll",
+        "lib/net48/UnityEngine.StreamingModule.dll",
+        "lib/net48/UnityEngine.SubstanceModule.dll",
+        "lib/net48/UnityEngine.SubsystemsModule.dll",
+        "lib/net48/UnityEngine.TLSModule.dll",
+        "lib/net48/UnityEngine.TerrainModule.dll",
+        "lib/net48/UnityEngine.TerrainPhysicsModule.dll",
+        "lib/net48/UnityEngine.TextCoreFontEngineModule.dll",
+        "lib/net48/UnityEngine.TextCoreTextEngineModule.dll",
+        "lib/net48/UnityEngine.TextRenderingModule.dll",
+        "lib/net48/UnityEngine.TilemapModule.dll",
+        "lib/net48/UnityEngine.UI.dll",
+        "lib/net48/UnityEngine.UIElementsModule.dll",
+        "lib/net48/UnityEngine.UIElementsNativeModule.dll",
+        "lib/net48/UnityEngine.UIModule.dll",
+        "lib/net48/UnityEngine.UNETModule.dll",
+        "lib/net48/UnityEngine.UmbraModule.dll",
+        "lib/net48/UnityEngine.UnityAnalyticsCommonModule.dll",
+        "lib/net48/UnityEngine.UnityAnalyticsModule.dll",
+        "lib/net48/UnityEngine.UnityConnectModule.dll",
+        "lib/net48/UnityEngine.UnityCurlModule.dll",
+        "lib/net48/UnityEngine.UnityTestProtocolModule.dll",
+        "lib/net48/UnityEngine.UnityWebRequestAssetBundleModule.dll",
+        "lib/net48/UnityEngine.UnityWebRequestAudioModule.dll",
+        "lib/net48/UnityEngine.UnityWebRequestModule.dll",
+        "lib/net48/UnityEngine.UnityWebRequestTextureModule.dll",
+        "lib/net48/UnityEngine.UnityWebRequestWWWModule.dll",
+        "lib/net48/UnityEngine.VFXModule.dll",
+        "lib/net48/UnityEngine.VRModule.dll",
+        "lib/net48/UnityEngine.VehiclesModule.dll",
+        "lib/net48/UnityEngine.VideoModule.dll",
+        "lib/net48/UnityEngine.VirtualTexturingModule.dll",
+        "lib/net48/UnityEngine.WindModule.dll",
+        "lib/net48/UnityEngine.XRModule.dll",
+        "lib/net48/UnityEngine.dll",
+        "lib/net48/YamlDotNet.dll",
+        "lib/net48/mscorlib.dll",
+        "lib/net48/netstandard.dll",
+        "lib/net48/zxing.dll"
+      ]
+    },
+    "ExMod.Exiled/9.14.2": {
+      "sha512": "VGveRNhYtj2C7X2PNQwvFfSjb9pdtDl5JvDQ5ea5lo/2GXzRkUQK3rwoeoBGt7q7hMihng8E31mwYAU7LiqljA==",
+      "type": "package",
+      "path": "exmod.exiled/9.14.2",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "exmod.exiled.9.14.2.nupkg.sha512",
+        "exmod.exiled.nuspec",
+        "images/Exiled_Icon.png",
+        "lib/net48/Assembly-CSharp-Publicized.dll",
+        "lib/net48/CommandSystem.Core.dll",
+        "lib/net48/Exiled.API.dll",
+        "lib/net48/Exiled.API.xml",
+        "lib/net48/Exiled.CreditTags.dll",
+        "lib/net48/Exiled.CreditTags.xml",
+        "lib/net48/Exiled.CustomItems.dll",
+        "lib/net48/Exiled.CustomItems.xml",
+        "lib/net48/Exiled.CustomRoles.dll",
+        "lib/net48/Exiled.CustomRoles.xml",
+        "lib/net48/Exiled.Events.dll",
+        "lib/net48/Exiled.Events.xml",
+        "lib/net48/Exiled.Loader.dll",
+        "lib/net48/Exiled.Loader.xml",
+        "lib/net48/Exiled.Permissions.dll",
+        "lib/net48/Exiled.Permissions.xml",
+        "lib/net48/LabApi.dll",
+        "lib/net48/NorthwoodLib.dll",
+        "lib/net48/YamlDotNet.dll"
+      ]
+    },
+    "Lib.Harmony/2.3.3": {
+      "sha512": "qxO8d2q7luoY8mTfCStQFOgRSd3dWZSS0Ffi5nrjX4qFkZxEBAEvNh5b/ZejTl2kY0fJs62LmfRJkBBTeiuuyQ==",
+      "type": "package",
+      "path": "lib.harmony/2.3.3",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "HarmonyLogo.png",
+        "LICENSE",
+        "README.md",
+        "lib.harmony.2.3.3.nupkg.sha512",
+        "lib.harmony.nuspec",
+        "lib/net35/0Harmony.dll",
+        "lib/net35/0Harmony.pdb",
+        "lib/net35/0Harmony.xml",
+        "lib/net452/0Harmony.dll",
+        "lib/net452/0Harmony.pdb",
+        "lib/net452/0Harmony.xml",
+        "lib/net472/0Harmony.dll",
+        "lib/net472/0Harmony.pdb",
+        "lib/net472/0Harmony.xml",
+        "lib/net48/0Harmony.dll",
+        "lib/net48/0Harmony.pdb",
+        "lib/net48/0Harmony.xml",
+        "lib/net5.0/0Harmony.dll",
+        "lib/net5.0/0Harmony.pdb",
+        "lib/net5.0/0Harmony.xml",
+        "lib/net6.0/0Harmony.dll",
+        "lib/net6.0/0Harmony.pdb",
+        "lib/net6.0/0Harmony.xml",
+        "lib/net7.0/0Harmony.dll",
+        "lib/net7.0/0Harmony.pdb",
+        "lib/net7.0/0Harmony.xml",
+        "lib/net8.0/0Harmony.dll",
+        "lib/net8.0/0Harmony.pdb",
+        "lib/net8.0/0Harmony.xml",
+        "lib/netcoreapp3.0/0Harmony.dll",
+        "lib/netcoreapp3.0/0Harmony.pdb",
+        "lib/netcoreapp3.0/0Harmony.xml",
+        "lib/netcoreapp3.1/0Harmony.dll",
+        "lib/netcoreapp3.1/0Harmony.pdb",
+        "lib/netcoreapp3.1/0Harmony.xml",
+        "lib/netstandard2.0/_._"
+      ]
+    },
+    "Microsoft.Bcl.AsyncInterfaces/8.0.0": {
+      "sha512": "3WA9q9yVqJp222P3x1wYIGDAkpjAku0TMUaaQV22g6L67AI0LdOIrVS7Ht2vJfLHGSPVuqN94vIr15qn+HEkHw==",
+      "type": "package",
+      "path": "microsoft.bcl.asyncinterfaces/8.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "Icon.png",
+        "LICENSE.TXT",
+        "PACKAGE.md",
+        "THIRD-PARTY-NOTICES.TXT",
+        "buildTransitive/net461/Microsoft.Bcl.AsyncInterfaces.targets",
+        "buildTransitive/net462/_._",
+        "lib/net462/Microsoft.Bcl.AsyncInterfaces.dll",
+        "lib/net462/Microsoft.Bcl.AsyncInterfaces.xml",
+        "lib/netstandard2.0/Microsoft.Bcl.AsyncInterfaces.dll",
+        "lib/netstandard2.0/Microsoft.Bcl.AsyncInterfaces.xml",
+        "lib/netstandard2.1/Microsoft.Bcl.AsyncInterfaces.dll",
+        "lib/netstandard2.1/Microsoft.Bcl.AsyncInterfaces.xml",
+        "microsoft.bcl.asyncinterfaces.8.0.0.nupkg.sha512",
+        "microsoft.bcl.asyncinterfaces.nuspec",
+        "useSharedDesignerContext.txt"
+      ]
+    },
+    "Newtonsoft.Json/13.0.4": {
+      "sha512": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A==",
+      "type": "package",
+      "path": "newtonsoft.json/13.0.4",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.md",
+        "README.md",
+        "lib/net20/Newtonsoft.Json.dll",
+        "lib/net20/Newtonsoft.Json.xml",
+        "lib/net35/Newtonsoft.Json.dll",
+        "lib/net35/Newtonsoft.Json.xml",
+        "lib/net40/Newtonsoft.Json.dll",
+        "lib/net40/Newtonsoft.Json.xml",
+        "lib/net45/Newtonsoft.Json.dll",
+        "lib/net45/Newtonsoft.Json.xml",
+        "lib/net6.0/Newtonsoft.Json.dll",
+        "lib/net6.0/Newtonsoft.Json.xml",
+        "lib/netstandard1.0/Newtonsoft.Json.dll",
+        "lib/netstandard1.0/Newtonsoft.Json.xml",
+        "lib/netstandard1.3/Newtonsoft.Json.dll",
+        "lib/netstandard1.3/Newtonsoft.Json.xml",
+        "lib/netstandard2.0/Newtonsoft.Json.dll",
+        "lib/netstandard2.0/Newtonsoft.Json.xml",
+        "newtonsoft.json.13.0.4.nupkg.sha512",
+        "newtonsoft.json.nuspec",
+        "packageIcon.png"
+      ]
+    },
+    "System.Buffers/4.5.1": {
+      "sha512": "Rw7ijyl1qqRS0YQD/WycNst8hUUMgrMH4FCn1nNm27M4VxchZ1js3fVjQaANHO5f3sN4isvP4a+Met9Y4YomAg==",
+      "type": "package",
+      "path": "system.buffers/4.5.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.TXT",
+        "THIRD-PARTY-NOTICES.TXT",
+        "lib/net461/System.Buffers.dll",
+        "lib/net461/System.Buffers.xml",
+        "lib/netcoreapp2.0/_._",
+        "lib/netstandard1.1/System.Buffers.dll",
+        "lib/netstandard1.1/System.Buffers.xml",
+        "lib/netstandard2.0/System.Buffers.dll",
+        "lib/netstandard2.0/System.Buffers.xml",
+        "lib/uap10.0.16299/_._",
+        "ref/net45/System.Buffers.dll",
+        "ref/net45/System.Buffers.xml",
+        "ref/netcoreapp2.0/_._",
+        "ref/netstandard1.1/System.Buffers.dll",
+        "ref/netstandard1.1/System.Buffers.xml",
+        "ref/netstandard2.0/System.Buffers.dll",
+        "ref/netstandard2.0/System.Buffers.xml",
+        "ref/uap10.0.16299/_._",
+        "system.buffers.4.5.1.nupkg.sha512",
+        "system.buffers.nuspec",
+        "useSharedDesignerContext.txt",
+        "version.txt"
+      ]
+    },
+    "System.Memory/4.5.5": {
+      "sha512": "XIWiDvKPXaTveaB7HVganDlOCRoj03l+jrwNvcge/t8vhGYKvqV+dMv6G4SAX2NoNmN0wZfVPTAlFwZcZvVOUw==",
+      "type": "package",
+      "path": "system.memory/4.5.5",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.TXT",
+        "THIRD-PARTY-NOTICES.TXT",
+        "lib/net461/System.Memory.dll",
+        "lib/net461/System.Memory.xml",
+        "lib/netcoreapp2.1/_._",
+        "lib/netstandard1.1/System.Memory.dll",
+        "lib/netstandard1.1/System.Memory.xml",
+        "lib/netstandard2.0/System.Memory.dll",
+        "lib/netstandard2.0/System.Memory.xml",
+        "ref/netcoreapp2.1/_._",
+        "system.memory.4.5.5.nupkg.sha512",
+        "system.memory.nuspec",
+        "useSharedDesignerContext.txt",
+        "version.txt"
+      ]
+    },
+    "System.Numerics.Vectors/4.5.0": {
+      "sha512": "QQTlPTl06J/iiDbJCiepZ4H//BVraReU4O4EoRw1U02H5TLUIT7xn3GnDp9AXPSlJUDyFs4uWjWafNX6WrAojQ==",
+      "type": "package",
+      "path": "system.numerics.vectors/4.5.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.TXT",
+        "THIRD-PARTY-NOTICES.TXT",
+        "lib/MonoAndroid10/_._",
+        "lib/MonoTouch10/_._",
+        "lib/net46/System.Numerics.Vectors.dll",
+        "lib/net46/System.Numerics.Vectors.xml",
+        "lib/netcoreapp2.0/_._",
+        "lib/netstandard1.0/System.Numerics.Vectors.dll",
+        "lib/netstandard1.0/System.Numerics.Vectors.xml",
+        "lib/netstandard2.0/System.Numerics.Vectors.dll",
+        "lib/netstandard2.0/System.Numerics.Vectors.xml",
+        "lib/portable-net45+win8+wp8+wpa81/System.Numerics.Vectors.dll",
+        "lib/portable-net45+win8+wp8+wpa81/System.Numerics.Vectors.xml",
+        "lib/uap10.0.16299/_._",
+        "lib/xamarinios10/_._",
+        "lib/xamarinmac20/_._",
+        "lib/xamarintvos10/_._",
+        "lib/xamarinwatchos10/_._",
+        "ref/MonoAndroid10/_._",
+        "ref/MonoTouch10/_._",
+        "ref/net45/System.Numerics.Vectors.dll",
+        "ref/net45/System.Numerics.Vectors.xml",
+        "ref/net46/System.Numerics.Vectors.dll",
+        "ref/net46/System.Numerics.Vectors.xml",
+        "ref/netcoreapp2.0/_._",
+        "ref/netstandard1.0/System.Numerics.Vectors.dll",
+        "ref/netstandard1.0/System.Numerics.Vectors.xml",
+        "ref/netstandard2.0/System.Numerics.Vectors.dll",
+        "ref/netstandard2.0/System.Numerics.Vectors.xml",
+        "ref/uap10.0.16299/_._",
+        "ref/xamarinios10/_._",
+        "ref/xamarinmac20/_._",
+        "ref/xamarintvos10/_._",
+        "ref/xamarinwatchos10/_._",
+        "system.numerics.vectors.4.5.0.nupkg.sha512",
+        "system.numerics.vectors.nuspec",
+        "useSharedDesignerContext.txt",
+        "version.txt"
+      ]
+    },
+    "System.Runtime.CompilerServices.Unsafe/6.0.0": {
+      "sha512": "/iUeP3tq1S0XdNNoMz5C9twLSrM/TH+qElHkXWaPvuNOt+99G75NrV0OS2EqHx5wMN7popYjpc8oTjC1y16DLg==",
+      "type": "package",
+      "path": "system.runtime.compilerservices.unsafe/6.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "Icon.png",
+        "LICENSE.TXT",
+        "THIRD-PARTY-NOTICES.TXT",
+        "buildTransitive/netcoreapp2.0/System.Runtime.CompilerServices.Unsafe.targets",
+        "buildTransitive/netcoreapp3.1/_._",
+        "lib/net461/System.Runtime.CompilerServices.Unsafe.dll",
+        "lib/net461/System.Runtime.CompilerServices.Unsafe.xml",
+        "lib/net6.0/System.Runtime.CompilerServices.Unsafe.dll",
+        "lib/net6.0/System.Runtime.CompilerServices.Unsafe.xml",
+        "lib/netcoreapp3.1/System.Runtime.CompilerServices.Unsafe.dll",
+        "lib/netcoreapp3.1/System.Runtime.CompilerServices.Unsafe.xml",
+        "lib/netstandard2.0/System.Runtime.CompilerServices.Unsafe.dll",
+        "lib/netstandard2.0/System.Runtime.CompilerServices.Unsafe.xml",
+        "system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
+        "system.runtime.compilerservices.unsafe.nuspec",
+        "useSharedDesignerContext.txt"
+      ]
+    },
+    "System.Text.Encodings.Web/8.0.0": {
+      "sha512": "yev/k9GHAEGx2Rg3/tU6MQh4HGBXJs70y7j1LaM1i/ER9po+6nnQ6RRqTJn1E7Xu0fbIFK80Nh5EoODxrbxwBQ==",
+      "type": "package",
+      "path": "system.text.encodings.web/8.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "Icon.png",
+        "LICENSE.TXT",
+        "THIRD-PARTY-NOTICES.TXT",
+        "buildTransitive/net461/System.Text.Encodings.Web.targets",
+        "buildTransitive/net462/_._",
+        "buildTransitive/net6.0/_._",
+        "buildTransitive/netcoreapp2.0/System.Text.Encodings.Web.targets",
+        "lib/net462/System.Text.Encodings.Web.dll",
+        "lib/net462/System.Text.Encodings.Web.xml",
+        "lib/net6.0/System.Text.Encodings.Web.dll",
+        "lib/net6.0/System.Text.Encodings.Web.xml",
+        "lib/net7.0/System.Text.Encodings.Web.dll",
+        "lib/net7.0/System.Text.Encodings.Web.xml",
+        "lib/net8.0/System.Text.Encodings.Web.dll",
+        "lib/net8.0/System.Text.Encodings.Web.xml",
+        "lib/netstandard2.0/System.Text.Encodings.Web.dll",
+        "lib/netstandard2.0/System.Text.Encodings.Web.xml",
+        "runtimes/browser/lib/net6.0/System.Text.Encodings.Web.dll",
+        "runtimes/browser/lib/net6.0/System.Text.Encodings.Web.xml",
+        "runtimes/browser/lib/net7.0/System.Text.Encodings.Web.dll",
+        "runtimes/browser/lib/net7.0/System.Text.Encodings.Web.xml",
+        "runtimes/browser/lib/net8.0/System.Text.Encodings.Web.dll",
+        "runtimes/browser/lib/net8.0/System.Text.Encodings.Web.xml",
+        "system.text.encodings.web.8.0.0.nupkg.sha512",
+        "system.text.encodings.web.nuspec",
+        "useSharedDesignerContext.txt"
+      ]
+    },
+    "System.Text.Json/8.0.5": {
+      "sha512": "0f1B50Ss7rqxXiaBJyzUu9bWFOO2/zSlifZ/UNMdiIpDYe4cY4LQQicP4nirK1OS31I43rn062UIJ1Q9bpmHpg==",
+      "type": "package",
+      "path": "system.text.json/8.0.5",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "Icon.png",
+        "LICENSE.TXT",
+        "PACKAGE.md",
+        "THIRD-PARTY-NOTICES.TXT",
+        "analyzers/dotnet/roslyn3.11/cs/System.Text.Json.SourceGeneration.dll",
+        "analyzers/dotnet/roslyn3.11/cs/cs/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/de/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/es/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/fr/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/it/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/ja/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/ko/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/pl/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/pt-BR/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/ru/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/tr/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/zh-Hans/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn3.11/cs/zh-Hant/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/System.Text.Json.SourceGeneration.dll",
+        "analyzers/dotnet/roslyn4.0/cs/cs/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/de/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/es/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/fr/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/it/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/ja/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/ko/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/pl/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/pt-BR/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/ru/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/tr/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/zh-Hans/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.0/cs/zh-Hant/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/System.Text.Json.SourceGeneration.dll",
+        "analyzers/dotnet/roslyn4.4/cs/cs/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/de/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/es/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/fr/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/it/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/ja/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/ko/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/pl/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/pt-BR/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/ru/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/tr/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/zh-Hans/System.Text.Json.SourceGeneration.resources.dll",
+        "analyzers/dotnet/roslyn4.4/cs/zh-Hant/System.Text.Json.SourceGeneration.resources.dll",
+        "buildTransitive/net461/System.Text.Json.targets",
+        "buildTransitive/net462/System.Text.Json.targets",
+        "buildTransitive/net6.0/System.Text.Json.targets",
+        "buildTransitive/netcoreapp2.0/System.Text.Json.targets",
+        "buildTransitive/netstandard2.0/System.Text.Json.targets",
+        "lib/net462/System.Text.Json.dll",
+        "lib/net462/System.Text.Json.xml",
+        "lib/net6.0/System.Text.Json.dll",
+        "lib/net6.0/System.Text.Json.xml",
+        "lib/net7.0/System.Text.Json.dll",
+        "lib/net7.0/System.Text.Json.xml",
+        "lib/net8.0/System.Text.Json.dll",
+        "lib/net8.0/System.Text.Json.xml",
+        "lib/netstandard2.0/System.Text.Json.dll",
+        "lib/netstandard2.0/System.Text.Json.xml",
+        "system.text.json.8.0.5.nupkg.sha512",
+        "system.text.json.nuspec",
+        "useSharedDesignerContext.txt"
+      ]
+    },
+    "System.Threading.Tasks.Extensions/4.5.4": {
+      "sha512": "zteT+G8xuGu6mS+mzDzYXbzS7rd3K6Fjb9RiZlYlJPam2/hU7JCBZBVEcywNuR+oZ1ncTvc/cq0faRr3P01OVg==",
+      "type": "package",
+      "path": "system.threading.tasks.extensions/4.5.4",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.TXT",
+        "THIRD-PARTY-NOTICES.TXT",
+        "lib/MonoAndroid10/_._",
+        "lib/MonoTouch10/_._",
+        "lib/net461/System.Threading.Tasks.Extensions.dll",
+        "lib/net461/System.Threading.Tasks.Extensions.xml",
+        "lib/netcoreapp2.1/_._",
+        "lib/netstandard1.0/System.Threading.Tasks.Extensions.dll",
+        "lib/netstandard1.0/System.Threading.Tasks.Extensions.xml",
+        "lib/netstandard2.0/System.Threading.Tasks.Extensions.dll",
+        "lib/netstandard2.0/System.Threading.Tasks.Extensions.xml",
+        "lib/portable-net45+win8+wp8+wpa81/System.Threading.Tasks.Extensions.dll",
+        "lib/portable-net45+win8+wp8+wpa81/System.Threading.Tasks.Extensions.xml",
+        "lib/xamarinios10/_._",
+        "lib/xamarinmac20/_._",
+        "lib/xamarintvos10/_._",
+        "lib/xamarinwatchos10/_._",
+        "ref/MonoAndroid10/_._",
+        "ref/MonoTouch10/_._",
+        "ref/netcoreapp2.1/_._",
+        "ref/xamarinios10/_._",
+        "ref/xamarinmac20/_._",
+        "ref/xamarintvos10/_._",
+        "ref/xamarinwatchos10/_._",
+        "system.threading.tasks.extensions.4.5.4.nupkg.sha512",
+        "system.threading.tasks.extensions.nuspec",
+        "useSharedDesignerContext.txt",
+        "version.txt"
+      ]
+    },
+    "System.ValueTuple/4.5.0": {
+      "sha512": "okurQJO6NRE/apDIP23ajJ0hpiNmJ+f0BwOlB/cSqTLQlw5upkf+5+96+iG2Jw40G1fCVCyPz/FhIABUjMR+RQ==",
+      "type": "package",
+      "path": "system.valuetuple/4.5.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.TXT",
+        "THIRD-PARTY-NOTICES.TXT",
+        "lib/MonoAndroid10/_._",
+        "lib/MonoTouch10/_._",
+        "lib/net461/System.ValueTuple.dll",
+        "lib/net461/System.ValueTuple.xml",
+        "lib/net47/System.ValueTuple.dll",
+        "lib/net47/System.ValueTuple.xml",
+        "lib/netcoreapp2.0/_._",
+        "lib/netstandard1.0/System.ValueTuple.dll",
+        "lib/netstandard1.0/System.ValueTuple.xml",
+        "lib/netstandard2.0/_._",
+        "lib/portable-net40+sl4+win8+wp8/System.ValueTuple.dll",
+        "lib/portable-net40+sl4+win8+wp8/System.ValueTuple.xml",
+        "lib/uap10.0.16299/_._",
+        "lib/xamarinios10/_._",
+        "lib/xamarinmac20/_._",
+        "lib/xamarintvos10/_._",
+        "lib/xamarinwatchos10/_._",
+        "ref/MonoAndroid10/_._",
+        "ref/MonoTouch10/_._",
+        "ref/net461/System.ValueTuple.dll",
+        "ref/net47/System.ValueTuple.dll",
+        "ref/netcoreapp2.0/_._",
+        "ref/netstandard2.0/_._",
+        "ref/portable-net40+sl4+win8+wp8/System.ValueTuple.dll",
+        "ref/uap10.0.16299/_._",
+        "ref/xamarinios10/_._",
+        "ref/xamarinmac20/_._",
+        "ref/xamarintvos10/_._",
+        "ref/xamarinwatchos10/_._",
+        "system.valuetuple.4.5.0.nupkg.sha512",
+        "system.valuetuple.nuspec",
+        "useSharedDesignerContext.txt",
+        "version.txt"
+      ]
+    }
+  },
+  "projectFileDependencyGroups": {
+    ".NETFramework,Version=v4.8": [
+      "ExMod.Exiled >= 9.14.2",
+      "Exiled.Dev.References >= 1.0.4",
+      "Lib.Harmony >= 2.3.3",
+      "Newtonsoft.Json >= 13.0.4",
+      "System.Text.Json >= 8.0.5"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\tkanu\\.nuget\\packages\\": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "C:\\Users\\tkanu\\Music\\SCPSLSERVER\\SCPSLSERVER.csproj",
+      "projectName": "EventHUD",
+      "projectPath": "C:\\Users\\tkanu\\Music\\SCPSLSERVER\\SCPSLSERVER.csproj",
+      "packagesPath": "C:\\Users\\tkanu\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\tkanu\\Music\\SCPSLSERVER\\obj\\",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "C:\\Users\\tkanu\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+      ],
+      "originalTargetFrameworks": [
+        "net48"
+      ],
+      "sources": {
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net48": {
+          "targetAlias": "net48",
+          "projectReferences": {}
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "10.0.200"
+    },
+    "frameworks": {
+      "net48": {
+        "targetAlias": "net48",
+        "dependencies": {
+          "ExMod.Exiled": {
+            "target": "Package",
+            "version": "[9.14.2, )"
+          },
+          "Exiled.Dev.References": {
+            "target": "Package",
+            "version": "[1.0.4, )"
+          },
+          "Lib.Harmony": {
+            "target": "Package",
+            "version": "[2.3.3, )"
+          },
+          "Newtonsoft.Json": {
+            "target": "Package",
+            "version": "[13.0.4, )"
+          },
+          "System.Text.Json": {
+            "target": "Package",
+            "version": "[8.0.5, )"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.203\\RuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}
