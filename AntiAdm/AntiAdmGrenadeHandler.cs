@@ -10,7 +10,7 @@ namespace EventHUD.AntiAdm
     /// <summary>
     /// Обработчик взрывов гранат:
     /// 1. Если рядом с взрывом >= порог предметов — очищает их (антилаг).
-    /// 2. Если рядом >= порог гранат — блокирует детонацию цепных гранат.
+    /// 2. Если рядом >= порог гранат — удаляет лишние сверх лимита.
     /// </summary>
     public class AntiAdmGrenadeHandler
     {
@@ -28,16 +28,22 @@ namespace EventHUD.AntiAdm
 
             Vector3 explosionPos = ev.Projectile.Position;
 
-            // ── Цепная детонация ──
-            // Считаем гранаты в радиусе
+            // ── Лимит гранат в одной точке ──
             float chainRadius = _config.AntiAdmGrenadeChainRadius;
-            int nearbyGrenades = CountNearbyGrenades(explosionPos, chainRadius, ev.Projectile);
+            var nearbyGrenades = GetNearbyGrenades(
+                explosionPos, chainRadius, ev.Projectile);
 
-            if (nearbyGrenades >= _config.AntiAdmGrenadeChainThreshold)
+            int maxAllowed = _config.AntiAdmMaxGrenadesPerSpot;
+
+            if (nearbyGrenades.Count > maxAllowed)
             {
-                // Блокируем и удаляем соседние гранаты
-                DestroyNearbyGrenades(explosionPos, chainRadius, ev.Projectile);
-                // Саму гранату не блокируем — она уже взрывается
+                // Оставляем maxAllowed ближайших, удаляем только лишние
+                foreach (var pickup in nearbyGrenades
+                             .OrderBy(p => (p.Position - explosionPos).sqrMagnitude)
+                             .Skip(maxAllowed))
+                {
+                    try { pickup.Destroy(); } catch { }
+                }
             }
 
             // ── Очистка предметов ──
@@ -53,40 +59,25 @@ namespace EventHUD.AntiAdm
             }
         }
 
-        private int CountNearbyGrenades(Vector3 pos, float radius, Exiled.API.Features.Pickups.Projectiles.Projectile exclude)
+        private List<Pickup> GetNearbyGrenades(
+            Vector3 pos,
+            float radius,
+            Exiled.API.Features.Pickups.Projectiles.Projectile exclude)
         {
-            int count = 0;
             float sqrRadius = radius * radius;
+            var result = new List<Pickup>();
 
             foreach (var pickup in Pickup.List)
             {
                 if (pickup == null || pickup == exclude) continue;
-                if (pickup.Type != ItemType.GrenadeHE && pickup.Type != ItemType.GrenadeFlash)
+                if (pickup.Type != ItemType.GrenadeHE &&
+                    pickup.Type != ItemType.GrenadeFlash)
                     continue;
                 if ((pickup.Position - pos).sqrMagnitude <= sqrRadius)
-                    count++;
-            }
-            return count;
-        }
-
-        private void DestroyNearbyGrenades(Vector3 pos, float radius, Exiled.API.Features.Pickups.Projectiles.Projectile exclude)
-        {
-            float sqrRadius = radius * radius;
-            var toDestroy = new List<Pickup>();
-
-            foreach (var pickup in Pickup.List)
-            {
-                if (pickup == null || pickup == exclude) continue;
-                if (pickup.Type != ItemType.GrenadeHE && pickup.Type != ItemType.GrenadeFlash)
-                    continue;
-                if ((pickup.Position - pos).sqrMagnitude <= sqrRadius)
-                    toDestroy.Add(pickup);
+                    result.Add(pickup);
             }
 
-            foreach (var p in toDestroy)
-            {
-                try { p.Destroy(); } catch { }
-            }
+            return result;
         }
 
         private List<Pickup> GetNearbyPickups(Vector3 pos, float radius)

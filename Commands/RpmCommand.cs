@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using CommandSystem;
 using EventHUD.Rpm;
 
@@ -33,7 +34,24 @@ namespace EventHUD.Commands
             if (moduleArg == "all")
             {
                 RpModuleManager.Instance.SetAll(enabled);
-                response = $"Все RP-модули: {(enabled ? "включены" : "выключены")}";
+
+                if (enabled)
+                {
+                    Plugin.Instance?
+                        .ElevatorBreaks?
+                        .Enable();
+                }
+                else
+                {
+                    Plugin.Instance?
+                        .ElevatorBreaks?
+                        .Disable(true);
+                }
+
+                response =
+                    $"Все RP-модули: " +
+                    $"{(enabled ? "включены" : "выключены")}";
+
                 return true;
             }
 
@@ -44,6 +62,26 @@ namespace EventHUD.Commands
             }
 
             RpModuleManager.Instance.SetEnabled(moduleType, enabled);
+
+            bool anyRpModuleEnabled =
+                Enum.GetValues(typeof(RpModuleType))
+                    .Cast<RpModuleType>()
+                    .Any(type =>
+                        RpModuleManager.Instance.IsEnabled(type));
+
+            if (anyRpModuleEnabled)
+            {
+                Plugin.Instance?
+                    .ElevatorBreaks?
+                    .Enable();
+            }
+            else
+            {
+                Plugin.Instance?
+                    .ElevatorBreaks?
+                    .Disable(true);
+            }
+
             response = $"Модуль {moduleType}: {(enabled ? "включен" : "выключен")}";
             return true;
         }

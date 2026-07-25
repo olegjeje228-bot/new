@@ -2,12 +2,15 @@ using System;
 using System.Linq;
 using EventHUD.AntiAdm;
 using EventHUD.AntiDdos;
+using EventHUD.Backpack;
 using EventHUD.EventHandlers;
 using EventHUD.Hud;
 using EventHUD.Medicine;
 using EventHUD.Radio;
+using EventHUD.Elevator;
 using EventHUD.Rpm;
 using EventHUD.Scp;
+using EventHUD.Cube;
 using Exiled.API.Features;
 
 namespace EventHUD
@@ -54,6 +57,9 @@ namespace EventHUD
         public HczArmoryService HczArmory { get; private set; }
         public HelicopterCrushService HelicopterCrush { get; private set; }
         public ScpTeslaProtectionService ScpTeslaProtection { get; private set; }
+        public ElevatorBreakSystem ElevatorBreaks { get; private set; }
+        public CubeLootSystem CubeLoot { get; private set; }
+        public Radio.RadioFmSystem RadioFm { get; private set; }
 
         public override void OnEnabled()
         {
@@ -155,7 +161,24 @@ namespace EventHUD
             Recoil.RecoilSystem.Register();
 
             // ── Audio ──
+            Audio.FileLog.Clear();
+            Audio.FileLog.Write("[Plugin] EventHUD запущен, лог очищен.");
             Audio.SoundService.LoadAll();
+
+            // ── Backpack system ──
+            new BackpackSystem().Register();
+
+            // ── Elevator break system ──
+            ElevatorBreaks = new ElevatorBreakSystem(Config);
+            ElevatorBreaks.Register();
+
+            // ── Cube loot system ──
+            CubeLoot = new CubeLootSystem();
+            CubeLoot.Register();
+
+            // ── Radio FM system ──
+            RadioFm = new Radio.RadioFmSystem();
+            RadioFm.Register();
 
             // ── AntiLag: детект массового спавна предметов (map editor) ──
             Exiled.Events.Handlers.Map.SpawningItem += OnSpawningItem;
@@ -322,6 +345,17 @@ namespace EventHUD
             Exiled.Events.Handlers.Server.RespawnedTeam -= HelicopterCrush.OnRespawnedTeam;
             Exiled.Events.Handlers.Player.TriggeringTesla -= ScpTeslaProtection.OnTriggeringTesla;
             Exiled.Events.Handlers.Player.Hurting -= ScpTeslaProtection.OnHurting;
+
+            BackpackSystem.Instance?.Unregister();
+
+            ElevatorBreaks?.Unregister();
+            ElevatorBreaks = null;
+
+            CubeLoot?.Unregister();
+            CubeLoot = null;
+
+            RadioFm?.Unregister();
+            RadioFm = null;
 
             HudToggleService.Reset();
             HudNoticeService.Reset();

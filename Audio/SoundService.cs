@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using Exiled.API.Features;
 using MEC;
 using UnityEngine;
@@ -13,9 +16,16 @@ namespace EventHUD.Audio
         public static string AudioDir =>
             Path.Combine(Paths.Configs, "EventHUD", "Audio");
 
-        private static Action<Vector3, string, float, float, float> _playAt;
-        private static Action<string, float> _playGlobal;
+        private static Func<Vector3, string, float, float, float, object> _playAt;
+        private static Func<string, float, object> _playGlobal;
         private static bool _audioChecked;
+        private static readonly HashSet<string> loadedClips = new HashSet<string>();
+
+        /// <summary>Проверка, жив ли AudioPlayer (наследник MonoBehaviour).</summary>
+        private static bool IsDead(object player)
+        {
+            return !(player is UnityEngine.Object uo) || uo == null;
+        }
 
         private static void InitAudio()
         {
@@ -24,97 +34,136 @@ namespace EventHUD.Audio
 
             try
             {
+                bool assemblyFound = false;
+
                 foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
                 {
                     if (!a.FullName.StartsWith("AudioPlayer")) continue;
 
+                    assemblyFound = true;
+                    FileLog.Write("[Sound] Сборка найдена: " + a.FullName);
+
                     var playerType = a.GetType("AudioPlayer");
-                    if (playerType == null) break;
+                    if (playerType == null)
+                    {
+                        FileLog.Write("[Sound] ОШИБКА: тип AudioPlayer не найден!");
+                        break;
+                    }
 
-                    var staticMethods = playerType.GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+                    // CreateOrGet один, у него 9 опциональных параметров.
+                    MethodInfo createMethod = playerType
+                        .GetMethods(BindingFlags.Static | BindingFlags.Public)
+                        .FirstOrDefault(m => m.Name == "CreateOrGet");
 
-                    // AudioPlayer.CreateOrGet(name, onIntialCreation) — ищем по имени + кол-ву параметров
-                    var createMethod = playerType.GetMethod("CreateOrGet",
-                        System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public,
-                        null, new[] { typeof(string), typeof(Delegate) }, null);
                     if (createMethod == null)
                     {
-                        // fallback: ищем любой CreateOrGet с 2 параметрами
-                        foreach (var m in playerType.GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public))
-                        {
-                            if (m.Name == "CreateOrGet" && m.GetParameters().Length == 2)
-                            {
-                                createMethod = m;
-                                break;
-                            }
-                        }
+                        FileLog.Write("[Sound] ОШИБКА: CreateOrGet не найден вообще!");
+                        break;
                     }
 
-                    if (createMethod != null)
+                    ParameterInfo[] pars = createMethod.GetParameters();
+                    FileLog.Write($"[Sound] CreateOrGet найден, параметров: {pars.Length}");
+
+                    object CreatePlayer(string name)
                     {
-                        _playAt = (pos, clip, volume, minDist, maxDist) =>
+                        object[] args = new object[pars.Length];
+                        args[0] = name;
+
+                        for (int i = 1; i < pars.Length; i++)
                         {
-                            var player = createMethod.Invoke(null, new object[] {
-                                $"EventHUD-{clip}-{_counter++}",
-                                (Action<object>)(p =>
-                                {
-                                    var addSpeaker = p.GetType().GetMethod("AddSpeaker",
-                                        new[] { typeof(string), typeof(bool), typeof(float), typeof(float) });
-                                    addSpeaker?.Invoke(p, new object[] { "Main", true, minDist, maxDist });
+                            Type pt = pars[i].ParameterType;
+                            if (pt == typeof(bool))
+                                args[i] = pars[i].Name == "sendSoundGlobally";
+                            else if (pt == typeof(byte))
+                                args[i] = (byte)255;
+                            else
+                                args[i] = null;
+                        }
 
-                                    var setPos = p.GetType().GetMethod("SetSpeakerPosition",
-                                        new[] { typeof(string), typeof(Vector3) });
-                                    setPos?.Invoke(p, new object[] { "Main", pos });
-
-                                    var addClip = p.GetType().GetMethod("AddClip",
-                                        new[] { typeof(string), typeof(float) });
-                                    addClip?.Invoke(p, new object[] { clip, volume });
-                                })
-                            });
-
-                            Timing.CallDelayed(30f, () =>
-                            {
-                                try
-                                {
-                                    var destroy = player.GetType().GetMethod("Destroy", Type.EmptyTypes);
-                                    destroy?.Invoke(player, null);
-                                }
-                                catch { }
-                            });
-                        };
-
-                        _playGlobal = (clip, volume) =>
+                        object player = createMethod.Invoke(null, args);
+                        if (player != null)
                         {
-                            var player = createMethod.Invoke(null, new object[] {
-                                $"EventHUD-global-{_counter++}",
-                                (Action<object>)(p =>
-                                {
-                                    var addSpeaker = p.GetType().GetMethod("AddSpeaker",
-                                        new[] { typeof(string), typeof(bool), typeof(float) });
-                                    addSpeaker?.Invoke(p, new object[] { "Main", false, 5000f });
-
-                                    var addClip = p.GetType().GetMethod("AddClip",
-                                        new[] { typeof(string), typeof(float) });
-                                    addClip?.Invoke(p, new object[] { clip, volume });
-                                })
-                            });
-
-                            Timing.CallDelayed(60f, () =>
-                            {
-                                try
-                                {
-                                    var destroy = player.GetType().GetMethod("Destroy", Type.EmptyTypes);
-                                    destroy?.Invoke(player, null);
-                                }
-                                catch { }
-                            });
-                        };
+                            // Выставляем флаги через свойства напрямую
+                            var t = player.GetType();
+                            t.GetProperty("SendSoundGlobally")?.SetValue(player, true);
+                            t.GetProperty("DestroyWhenAllClipsPlayed")?.SetValue(player, false);
+                            FileLog.Write($"[Sound] SendSoundGlobally={t.GetProperty("SendSoundGlobally")?.GetValue(player)}, DestroyWhenAllClipsPlayed={t.GetProperty("DestroyWhenAllClipsPlayed")?.GetValue(player)}");
+                        }
+                        return player;
                     }
+
+                    _playAt = (pos, clip, volume, minDist, maxDist) =>
+                    {
+                        object player = CreatePlayer($"EventHUD-{clip}-{_counter++}");
+                        if (player == null)
+                        {
+                            FileLog.Write("[Sound] ОШИБКА: CreateOrGet вернул null");
+                            return null;
+                        }
+
+                        Type t = player.GetType();
+
+                        var addSpeaker = t.GetMethod("AddSpeaker", new[]
+                        {
+                            typeof(string), typeof(Vector3), typeof(float),
+                            typeof(bool), typeof(float), typeof(float)
+                        });
+
+                        if (addSpeaker == null)
+                            FileLog.Write("[Sound] ОШИБКА: AddSpeaker(6) не найден");
+                        else
+                            addSpeaker.Invoke(player, new object[]
+                                { "Main", pos, volume, true, minDist, maxDist });
+
+                        var addClip = t.GetMethod("AddClip", new[]
+                        {
+                            typeof(string), typeof(float), typeof(bool), typeof(bool)
+                        });
+
+                        if (addClip == null)
+                            FileLog.Write("[Sound] ОШИБКА: AddClip(4) не найден");
+                        else
+                            addClip.Invoke(player, new object[] { clip, volume, false, true });
+
+                        return player;
+                    };
+
+                    _playGlobal = (clip, volume) =>
+                    {
+                        object player = CreatePlayer($"EventHUD-global-{_counter++}");
+                        if (player == null) return null;
+
+                        Type t = player.GetType();
+
+                        var addSpeaker = t.GetMethod("AddSpeaker", new[]
+                        {
+                            typeof(string), typeof(float), typeof(bool),
+                            typeof(float), typeof(float)
+                        });
+
+                        addSpeaker?.Invoke(player, new object[]
+                            { "Main", volume, false, 5000f, 5000f });
+
+                        var addClip = t.GetMethod("AddClip", new[]
+                        {
+                            typeof(string), typeof(float), typeof(bool), typeof(bool)
+                        });
+
+                        addClip?.Invoke(player, new object[] { clip, volume, false, true });
+
+                        return player;
+                    };
 
                     break;
                 }
+
+                if (!assemblyFound)
+                    FileLog.Write("[Sound] ОШИБКА: AudioPlayerApi не установлен!");
             }
-            catch { }
+            catch (Exception e)
+            {
+                FileLog.WriteEx("[Sound] ОШИБКА InitAudio", e);
+            }
         }
 
         // Загрузить все .ogg из папки Audio через AudioClipStorage
@@ -123,6 +172,9 @@ namespace EventHUD.Audio
             try
             {
                 Directory.CreateDirectory(AudioDir);
+
+                string[] oggFiles = Directory.GetFiles(AudioDir, "*.ogg");
+                FileLog.Write($"[Sound] Папка {AudioDir}: найдено ogg-файлов: {oggFiles.Length} ({string.Join(", ", System.Array.ConvertAll(oggFiles, Path.GetFileName))})");
 
                 foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
                 {
@@ -136,17 +188,40 @@ namespace EventHUD.Audio
 
                     if (loadClip != null)
                     {
-                        foreach (string file in Directory.GetFiles(AudioDir, "*.ogg"))
+                        foreach (string file in oggFiles)
                         {
                             string name = Path.GetFileNameWithoutExtension(file);
+
                             try
                             {
+                                // === УЛЬТРА-ДИАГНОСТИКА ФАЙЛА ===
+                                var info = new FileInfo(file);
+                                byte[] head = new byte[64];
+
+                                using (var fs = File.OpenRead(file))
+                                    fs.Read(head, 0, (int)Math.Min(64, info.Length));
+
+                                string magic = System.Text.Encoding.ASCII.GetString(head, 0, Math.Min(4, head.Length));
+                                string headText = System.Text.Encoding.ASCII.GetString(head);
+
+                                string codec =
+                                    headText.Contains("\x01vorbis") ? "VORBIS (правильный)" :
+                                    headText.Contains("OpusHead")   ? "OPUS — НЕ поддерживается, нужен Vorbis!" :
+                                    headText.Contains("FLAC")       ? "FLAC — НЕ поддерживается!" :
+                                    "неизвестный (возможно, переименованный mp3/wav)";
+
+                                FileLog.Write($"[Sound] Файл {info.Name}: {info.Length} байт, изменён {info.LastWriteTime:HH:mm:ss dd.MM}, контейнер: {(magic == "OggS" ? "OGG" : $"НЕ OGG (magic='{magic}')")}, кодек: {codec}");
+
+                                // === ЗАГРУЗКА ===
                                 loadClip.Invoke(null, new object[] { file, name });
                                 Log.Info($"[Sound] Загружен звук: {name}");
+                                FileLog.Write($"[Sound] Загружен клип: {name}");
+                                loadedClips.Add(name);
                             }
                             catch (Exception e)
                             {
                                 Log.Warn($"[Sound] Не удалось загрузить {name}: {e.Message}");
+                                FileLog.WriteEx($"[Sound] ОШИБКА загрузки {name}", e);
                             }
                         }
                     }
@@ -157,20 +232,36 @@ namespace EventHUD.Audio
             catch (Exception e)
             {
                 Log.Warn($"[Sound] {e.Message}");
+                FileLog.WriteEx("[Sound] LoadAll error", e);
             }
         }
 
-        public static void PlayAt(Vector3 position, string clipName,
+        public static object PlayAt(Vector3 position, string clipName,
             float volume = 1f, float minDistance = 3f, float maxDistance = 25f)
         {
             try
             {
                 InitAudio();
-                _playAt?.Invoke(position, clipName, volume, minDistance, maxDistance);
+
+                if (_playAt == null)
+                {
+                    FileLog.Write($"[Sound] ПРОПУЩЕН звук {clipName}: AudioPlayer API недоступен.");
+                    return null;
+                }
+
+                if (!loadedClips.Contains(clipName))
+                {
+                    FileLog.Write($"[Sound] ПРОПУЩЕН {clipName}: клип НЕ загружен, играть нечего.");
+                    return null;
+                }
+
+                FileLog.Write($"[Sound] Играю {clipName} в {position}, vol={volume}, dist={minDistance}-{maxDistance}");
+                return _playAt(position, clipName, volume, minDistance, maxDistance);
             }
             catch (Exception e)
             {
-                Log.Warn($"[Sound] PlayAt {clipName}: {e.Message}");
+                FileLog.WriteEx($"[Sound] ОШИБКА PlayAt {clipName}", e);
+                return null;
             }
         }
 
@@ -179,11 +270,250 @@ namespace EventHUD.Audio
             try
             {
                 InitAudio();
-                _playGlobal?.Invoke(clipName, volume);
+
+                if (_playGlobal == null)
+                {
+                    FileLog.Write($"[Sound] ПРОПУЩЕН глобальный звук {clipName}: AudioPlayer API недоступен.");
+                    return;
+                }
+
+                if (!loadedClips.Contains(clipName))
+                {
+                    FileLog.Write($"[Sound] ПРОПУЩЕН {clipName}: клип НЕ загружен, играть нечего.");
+                    return;
+                }
+
+                FileLog.Write($"[Sound] Играю глобально {clipName}, vol={volume}");
+                _playGlobal(clipName, volume);
             }
             catch (Exception e)
             {
-                Log.Warn($"[Sound] PlayGlobal {clipName}: {e.Message}");
+                FileLog.WriteEx($"[Sound] ОШИБКА PlayGlobal {clipName}", e);
+            }
+        }
+
+        /// <summary>Зацикленный звук, следующий за лифтом. Возвращает handle для остановки.</summary>
+        public static object PlayFollowing(
+            Exiled.API.Features.Lift lift,
+            string clipName,
+            float volume = 1f,
+            float minDistance = 2f,
+            float maxDistance = 25f)
+        {
+            try
+            {
+                InitAudio();
+
+                if (_playAt == null)
+                {
+                    FileLog.Write($"[Sound] ПРОПУЩЕН {clipName}: API недоступен.");
+                    return null;
+                }
+
+                if (!loadedClips.Contains(clipName))
+                {
+                    FileLog.Write($"[Sound] ПРОПУЩЕН {clipName}: клип НЕ загружен, играть нечего.");
+                    return null;
+                }
+
+                object player = CreateLoopedPlayer($"EventHUD-{clipName}-{_counter++}", clipName, volume, minDistance, maxDistance);
+                if (player == null) return null;
+
+                FileLog.Write($"[Sound] Играю {clipName} (зациклен, следует за лифтом), vol={volume}");
+
+                // Диагностика: жив ли плеер через 2 секунды
+                object captured = player;
+                Timing.CallDelayed(2f, () => FileLog.Write($"[Sound] Через 2с: жив={!IsDead(captured)}"));
+
+                Timing.RunCoroutine(FollowSpeaker(player, lift));
+                return player;
+            }
+            catch (Exception e)
+            {
+                FileLog.WriteEx($"[Sound] ОШИБКА PlayFollowing {clipName}", e);
+                return null;
+            }
+        }
+
+        private static object CreateLoopedPlayer(string name, string clip, float volume, float minDist, float maxDist)
+        {
+            foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (!a.FullName.StartsWith("AudioPlayer")) continue;
+
+                var playerType = a.GetType("AudioPlayer");
+                if (playerType == null) break;
+
+                MethodInfo createMethod = playerType
+                    .GetMethods(BindingFlags.Static | BindingFlags.Public)
+                    .FirstOrDefault(m => m.Name == "CreateOrGet");
+
+                if (createMethod == null) break;
+
+                ParameterInfo[] pars = createMethod.GetParameters();
+                object[] args = new object[pars.Length];
+                args[0] = name;
+                for (int i = 1; i < pars.Length; i++)
+                {
+                    Type pt = pars[i].ParameterType;
+                    if (pt == typeof(bool))
+                        args[i] = pars[i].Name == "sendSoundGlobally";
+                    else if (pt == typeof(byte))
+                        args[i] = (byte)255;
+                    else
+                        args[i] = null;
+                }
+
+                object player = createMethod.Invoke(null, args);
+                if (player == null) return null;
+
+                // Выставляем флаги через свойства напрямую
+                var t = player.GetType();
+                t.GetProperty("SendSoundGlobally")?.SetValue(player, true);
+                t.GetProperty("DestroyWhenAllClipsPlayed")?.SetValue(player, false);
+                FileLog.Write($"[Sound] Looped: SendSoundGlobally={t.GetProperty("SendSoundGlobally")?.GetValue(player)}, DestroyWhenAllClipsPlayed={t.GetProperty("DestroyWhenAllClipsPlayed")?.GetValue(player)}");
+
+                var addSpeaker = t.GetMethod("AddSpeaker", new[]
+                {
+                    typeof(string), typeof(Vector3), typeof(float),
+                    typeof(bool), typeof(float), typeof(float)
+                });
+
+                object speakerResult = null;
+                if (addSpeaker == null)
+                    FileLog.Write("[Sound] ОШИБКА: AddSpeaker(6) не найден");
+                else
+                    speakerResult = addSpeaker.Invoke(player, new object[]
+                        { "Main", Vector3.zero, volume, true, minDist, maxDist });
+
+                var addClip = t.GetMethod("AddClip", new[]
+                {
+                    typeof(string), typeof(float), typeof(bool), typeof(bool)
+                });
+
+                object clipResult = null;
+                if (addClip == null)
+                    FileLog.Write("[Sound] ОШИБКА: AddClip(4) не найден");
+                else
+                    clipResult = addClip.Invoke(player, new object[] { clip, volume, true, false });
+
+                FileLog.Write($"[Sound] CreateLoopedPlayer: AddSpeaker -> {(speakerResult != null ? "ок" : "NULL!")}, AddClip -> {(clipResult != null ? "ок" : "NULL!")}");
+
+                return player;
+            }
+            return null;
+        }
+
+        private static IEnumerator<float> FollowSpeaker(object player, Exiled.API.Features.Lift lift)
+        {
+            var setPos = player.GetType().GetMethod("SetSpeakerPosition", new[] { typeof(string), typeof(Vector3) });
+
+            while (true)
+            {
+                yield return Timing.WaitForSeconds(0.1f);
+
+                if (IsDead(player))
+                    yield break;
+
+                try { setPos?.Invoke(player, new object[] { "Main", lift.Position }); }
+                catch { yield break; }
+            }
+        }
+
+        /// <summary>
+        /// Play a live stream URL (AddLiveStream) at a position with volume and range.
+        /// Uses AudioPlayerApi.CreateOrGet + AddSpeaker + AddLiveStream via reflection.
+        /// </summary>
+        public static object PlayStream(string url, Vector3 position, float volume, float maxDistance, string playerName)
+        {
+            try
+            {
+                InitAudio();
+
+                foreach (var a in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    if (!a.FullName.StartsWith("AudioPlayer")) continue;
+
+                    var playerType = a.GetType("AudioPlayer");
+                    if (playerType == null) break;
+
+                    MethodInfo createMethod = playerType
+                        .GetMethods(BindingFlags.Static | BindingFlags.Public)
+                        .FirstOrDefault(m => m.Name == "CreateOrGet");
+
+                    if (createMethod == null) break;
+
+                    ParameterInfo[] pars = createMethod.GetParameters();
+                    object[] args = new object[pars.Length];
+                    args[0] = playerName;
+                    for (int i = 1; i < pars.Length; i++)
+                    {
+                        Type pt = pars[i].ParameterType;
+                        if (pt == typeof(bool))
+                            args[i] = pars[i].Name == "sendSoundGlobally";
+                        else if (pt == typeof(byte))
+                            args[i] = (byte)255;
+                        else
+                            args[i] = null;
+                    }
+
+                    object player = createMethod.Invoke(null, args);
+                    if (player == null) return null;
+
+                    var t = player.GetType();
+                    t.GetProperty("SendSoundGlobally")?.SetValue(player, true);
+                    t.GetProperty("DestroyWhenAllClipsPlayed")?.SetValue(player, false);
+
+                    var addSpeaker = t.GetMethod("AddSpeaker", new[]
+                    {
+                        typeof(string), typeof(Vector3), typeof(float),
+                        typeof(bool), typeof(float), typeof(float)
+                    });
+
+                    addSpeaker?.Invoke(player, new object[]
+                        { "Main", position, volume, true, 2f, maxDistance });
+
+                    var addLiveStream = t.GetMethod("AddLiveStream", new[]
+                    {
+                        typeof(string), typeof(float), typeof(string)
+                    });
+
+                    if (addLiveStream == null)
+                    {
+                        FileLog.Write("[Sound] AddLiveStream(3) ne nayden v AudioPlayerApi!");
+                        t.GetMethod("Destroy", Type.EmptyTypes)?.Invoke(player, null);
+                        return null;
+                    }
+
+                    addLiveStream.Invoke(player, new object[] { url, volume, "RadioStream" });
+
+                    FileLog.Write($"[Sound] Stream zapushchen: {url}, vol={volume}, maxDist={maxDistance}, name={playerName}");
+                    return player;
+                }
+
+                return null;
+            }
+            catch (Exception e)
+            {
+                FileLog.WriteEx("[Sound] Oshibka PlayStream", e);
+                return null;
+            }
+        }
+
+        /// <summary>Остановить зацикленный звук (например, при restore лифта).</summary>
+        public static void StopHandle(object player)
+        {
+            if (player == null || IsDead(player))
+                return;
+
+            try
+            {
+                player.GetType().GetMethod("Destroy", Type.EmptyTypes)?.Invoke(player, null);
+                FileLog.Write("[Sound] Зацикленный звук лифта остановлен.");
+            }
+            catch (Exception e)
+            {
+                FileLog.WriteEx("[Sound] StopHandle", e);
             }
         }
 

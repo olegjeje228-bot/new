@@ -562,6 +562,9 @@ namespace EventHUD
         [Description("Интервал сканирования плотности гранат, сек")]
         public float AntiAdmGrenadeDensityInterval { get; set; } = 3f;
 
+        [Description("Максимум гранат в одной точке; лишние сверх лимита удаляются")]
+        public int AntiAdmMaxGrenadesPerSpot { get; set; } = 5;
+
         // ===================== Анти-Лаг (AntiLag) =====================
 
         [Description("Интервал сканирования рагдоллов и предметов, сек")]
@@ -720,5 +723,203 @@ namespace EventHUD
 
         [Description("Voffset хинта FullRP (em). Поставь = voffset ивент-строки минус 15")]
         public float FullRpHintVoffset { get; set; } = 48f;
+
+        // ===================== Поломка лифтов (ElevatorBreak) =====================
+
+        [Description("Включать поломку лифтов автоматически на RP-ивентах")]
+        public bool ElevatorAutoEnableForRp { get; set; } = true;
+
+        [Description("Шанс поломки со второй и каждой следующей гранаты: 0.5 = 50%")]
+        public float ElevatorGrenadeBreakChance { get; set; } = 0.50f;
+
+        [Description("Шанс поломки при перегрузе: 0.50 = 50%")]
+        public float ElevatorOverweightBreakChance { get; set; } = 0.50f;
+
+        [Description("Максимальный вес лифта, кг")]
+        public float ElevatorMaxWeight { get; set; } = 750f;
+
+        [Description("Блокировка дверей после перегруза, сек")]
+        public float ElevatorOverweightLockSeconds { get; set; } = 30f;
+
+        [Description("Интервал проверки веса лифта, сек")]
+        public float ElevatorWeightCheckInterval { get; set; } = 0.5f;
+
+        [Description("Интенсивность ослепления внутри сломанного лифта")]
+        public byte ElevatorBlindnessIntensity { get; set; } = 70;
+
+        [Description("Интервал проверки игроков в сломанном лифте")]
+        public float ElevatorBrokenLiftEffectInterval { get; set; } = 0.1f;
+
+        [Description("Продолжительность эффекта Scanned при поломке лифта")]
+        public float ElevatorScannedDuration { get; set; } = 10f;
+
+        [Description("Название звука поломки лифта без расширения")]
+        public string ElevatorBrokenSound { get; set; } = "elbroke";
+
+        [Description("Громкость звука поломки лифта")]
+        public float ElevatorBrokenSoundVolume { get; set; } = 2f;
+
+        [Description("Минимальная дистанция пространственного звука")]
+        public float ElevatorBrokenSoundMinDistance { get; set; } = 2f;
+
+        [Description("Максимальная дистанция пространственного звука")]
+        public float ElevatorBrokenSoundMaxDistance { get; set; } = 25f;
+
+        [Description("Сколько секунд источник звука следует за лифтом")]
+        public float ElevatorBrokenSoundFollowSeconds { get; set; } = 30f;
+
+        [Description("Схематик сломанного монитора")]
+        public string ElevatorBrokenSchematic { get; set; } = "el_broke";
+
+        [Description("Вес человека, кг")]
+        public float ElevatorHumanWeight { get; set; } = 50f;
+
+        [Description("Вес SCP-939, кг")]
+        public float ElevatorScp939Weight { get; set; } = 250f;
+
+        [Description("Вес SCP-173, кг")]
+        public float ElevatorScp173Weight { get; set; } = 500f;
+
+        [Description("Вес SCP-096, кг")]
+        public float ElevatorScp096Weight { get; set; } = 100f;
+
+        [Description("Вес SCP-3114, кг")]
+        public float ElevatorScp3114Weight { get; set; } = 20f;
+
+        [Description("Вес SCP-049, кг")]
+        public float ElevatorScp049Weight { get; set; } = 50f;
+
+        [Description("Вес SCP-049-2, кг")]
+        public float ElevatorScp0492Weight { get; set; } = 40f;
+
+        // ===================== Рюкзак (Backpack) =====================
+
+        [Description("Рюкзак: включена ли система")]
+        public bool BackpackEnabled { get; set; } = true;
+
+        [Description("Рюкзак: вместимость по типу броника")]
+        public System.Collections.Generic.Dictionary<ItemType, int> BackpackCapacity { get; set; } = new System.Collections.Generic.Dictionary<ItemType, int>
+        {
+            [ItemType.ArmorLight] = 3,
+            [ItemType.ArmorCombat] = 5,
+            [ItemType.ArmorHeavy] = 8,
+        };
+
+        [Description("Рюкзак: сколько слотов занимает предмет (кого нет в списке — 1 слот)")]
+        public System.Collections.Generic.Dictionary<ItemType, int> BackpackSlotCost { get; set; } = new System.Collections.Generic.Dictionary<ItemType, int>
+        {
+            [ItemType.MicroHID] = 8,
+        };
+
+        [Description("Рюкзак: предметы, которые нельзя класть вообще")]
+        public System.Collections.Generic.List<ItemType> BackpackForbidden { get; set; } = new System.Collections.Generic.List<ItemType>
+        {
+            ItemType.ArmorLight, ItemType.ArmorCombat, ItemType.ArmorHeavy,
+        };
+
+        [Description("Рюкзак: включать автоматически на RP-ивентах")]
+        public bool BackpackAutoEnableForRp { get; set; } = true;
+
+        [Description("Рюкзак: окно двойного клика для сброса броника, сек")]
+        public float BackpackDoubleClickSeconds { get; set; } = 0.4f;
+
+        // ===================== CUBE (Куб) =====================
+
+        [Description("Включена ли возможность запуска системы лута Куба.")]
+        public bool CubeLootEnabled { get; set; } = true;
+
+        [Description("На сколько комнат вперёд создавать лут. 2 означает: игроки в комнате 5 — лут появляется в комнате 7.")]
+        public int CubePreloadRoomDistance { get; set; } = 2;
+
+        [Description("Как часто проверять комнаты игроков.")]
+        public float CubeRoomScanInterval { get; set; } = 0.35f;
+
+        [Description("Минимальное расстояние между созданными предметами.")]
+        public float CubeLootSpacing { get; set; } = 0.65f;
+
+        [Description("Удалять созданный Кубом лут при cub off.")]
+        public bool CubeRemoveLootOnDisable { get; set; } = true;
+
+        [Description("Удалять созданный Кубом лут при окончании раунда.")]
+        public bool CubeRemoveLootOnRoundEnd { get; set; } = true;
+
+        [Description("Не учитывать наблюдателей, Tutorial и SCP при подсчёте размера группы.")]
+        public bool CubeCountOnlyHumanPlayers { get; set; } = true;
+
+        [Description("Удача Куба по умолчанию. 1 = обычный режим.")]
+        public int CubeDefaultLuck { get; set; } = 1;
+
+        [Description("Максимальное количество предметов в одной комнате.")]
+        public int CubeMaximumItemsPerRoom { get; set; } = 100;
+
+        [Description("Минимум предметов в каждой комнате")]
+        public int CubeMinimumItemsPerRoom { get; set; } = 2;
+
+        [Description("Обычный максимум предметов без удачи")]
+        public int CubeNormalMaximumItemsPerRoom { get; set; } = 8;
+
+        [Description("Сколько раз пытаться создать один предмет")]
+        public int CubeItemSpawnAttempts { get; set; } = 15;
+
+        // ===================== Radio FM =====================
+
+        [Description("Включена ли система радио")]
+        public bool RadioFmEnabled { get; set; } = true;
+
+        [Description("Папка с ogg-сегментами внутри Configs/EventHUD/")]
+        public string RadioFmAudioFolder { get; set; } = "Audio/RadioFM";
+
+        [Description("Длина сегмента в секундах (должна совпадать с ffmpeg -segment_time)")]
+        public int RadioFmSegmentSeconds { get; set; } = 20;
+
+        [Description("Сколько старых сегментов хранить")]
+        public int RadioFmKeepSegments { get; set; } = 3;
+
+        [Description("Схематик выключенного радио, красный сигнал")]
+        public string RadioFmSchematicOff { get; set; } = "Radio";
+
+        [Description("Схематик включенного радио, зеленый сигнал")]
+        public string RadioFmSchematicOn { get; set; } = "Radio2";
+
+        [Description("На каком расстоянии игрок может пользоваться радио")]
+        public float RadioFmUseDistance { get; set; } = 3f;
+
+        [Description("Максимальная громкость которую может поставить игрок")]
+        public int RadioFmMaxVolume { get; set; } = 5;
+
+        [Description("Громкость при спавне")]
+        public int RadioFmDefaultVolume { get; set; } = 1;
+
+        [Description("Сколько секунд работает батарейка на каждой громкости. Индекс это громкость")]
+        public System.Collections.Generic.List<float> RadioFmBatterySeconds { get; set; } = new System.Collections.Generic.List<float>
+        {
+            0f,      // 0 - вечно
+            10800f,  // 1 - 3 часа
+            9000f,   // 2 - 2.5 часа
+            7200f,   // 3 - 2 часа
+            5400f,   // 4 - 1.5 часа
+            3600f,   // 5 - 1 час
+        };
+
+        [Description("Радиус слышимости для каждой громкости")]
+        public System.Collections.Generic.List<float> RadioFmRange { get; set; } = new System.Collections.Generic.List<float>
+        {
+            0f, 15f, 21f, 27f, 34f, 40f
+        };
+
+        [Description("Урон при попытке сменить батарейку на включенном радио")]
+        public float RadioFmShockDamage { get; set; } = 20f;
+
+        [Description("Сколько секунд эффект Flashed при ударе током")]
+        public float RadioFmShockFlashSeconds { get; set; } = 2f;
+
+        [Description("Сколько секунд висит broadcast про удар током")]
+        public ushort RadioFmShockBroadcastSeconds { get; set; } = 5;
+
+        [Description("Дистанция спавна радио перед игроком")]
+        public float RadioFmSpawnDistance { get; set; } = 1.2f;
+
+        [Description("Смещение схематика по Y после raycast на пол")]
+        public float RadioFmSpawnYOffset { get; set; } = 0f;
     }
 }

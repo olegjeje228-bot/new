@@ -1,0 +1,14 @@
+[Unit]
+Description=SCP:SL DDoS monitor to Discord
+After=network-online.target sl-firewall.service
+Wants=network-online.target
+Requires=sl-firewall.service
+
+[Service]
+Type=simple
+ExecStart=/home/scpsl/ddos-monitor.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

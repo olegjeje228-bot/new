@@ -4,6 +4,7 @@ using CommandSystem;
 using EventHUD.Enums;
 using EventHUD.Extensions;
 using EventHUD.Models;
+using EventHUD.Elevator;
 using EventHUD.Radio;
 using EventHUD.Rpm;
 using Exiled.API.Features;
@@ -79,6 +80,15 @@ namespace EventHUD
 
             NotifyRaActivity();
 
+            // Auto-enable elevator breaks for RP events (all except NONRP)
+            bool isRp =
+                Session.RpType != RPType.NONRP;
+
+            if (Plugin.Instance.Config.ElevatorAutoEnableForRp && isRp)
+                Plugin.Instance.ElevatorBreaks?.Enable();
+            else
+                Plugin.Instance.ElevatorBreaks?.Disable(true);
+
             Timing.KillCoroutines(_transitionHandle);
             _transitionHandle = Timing.RunCoroutine(TransitionToRunning());
 
@@ -99,6 +109,9 @@ namespace EventHUD
                 message = "Нет активного ивента.";
                 return false;
             }
+
+            Plugin.Instance.ElevatorBreaks?.Disable(true);
+            Backpack.BackpackSystem.Instance?.CloseAllOpen();
 
             Session.State     = EventState.Stopping;
             Session.StoppedAt = DateTime.UtcNow;
