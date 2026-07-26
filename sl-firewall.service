@@ -1,0 +1,12 @@
+[Unit]
+Description=SCP:SL network firewall
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/scpsl/sl-firewall.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

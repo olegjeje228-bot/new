@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>TpsOptimizer</AssemblyName>
+    <RootNamespace>TpsOptimizer</RootNamespace>
+
+    <!-- We ship our own Properties/AssemblyInfo.cs -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+    <!-- Single source of truth for the plugin version: 1.0.0 -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>1.0.0</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      NOTE: The public NuGet package that ships EXILED 9.14.2 is "ExMod.Exiled".
+      "Exiled.Dev.References" provides the Unity / base-game reference assemblies
+      (UnityEngine, Assembly-CSharp, MEC/Timing, CommandSystem, ...).
+      IncludeAssets="compile" keeps these reference-only: they are provided by the
+      server at runtime and must NOT be copied next to the plugin dll.
+    -->
+    <PackageReference Include="ExMod.Exiled" Version="9.14.2" IncludeAssets="compile" />
+    <PackageReference Include="Exiled.Dev.References" Version="1.0.4" IncludeAssets="compile" />
+  </ItemGroup>
+
+</Project>
