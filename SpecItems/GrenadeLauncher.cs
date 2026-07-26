@@ -2,7 +2,7 @@ namespace EventHUD.SpecItems
 {
     using System;
     using System.Collections.Generic;
-    using System.Reflection;
+    using System.Linq;
     using Exiled.API.Enums;
     using Exiled.API.Features;
     using Exiled.API.Features.Attributes;
@@ -10,339 +10,310 @@ namespace EventHUD.SpecItems
     using Exiled.API.Features.Pickups.Projectiles;
     using Exiled.API.Features.Spawn;
     using Exiled.CustomItems.API.Features;
+    using Exiled.Events.EventArgs.Player;
+    using InventorySystem.Items.MicroHID.Modules;
     using MEC;
     using UnityEngine;
 
     [CustomItem(ItemType.MicroHID)]
     public sealed class GrenadeLauncher : CustomItem
     {
-        private const string BroadcastOverheat = "<color=red>Гранатомёт перегрелся... охлаждение: {0} сек</color>";
+        private const float GrenadeSpeed = 10f;
+        private const float FastInterval = 0.2f;
+        private const float SlowInterval = 0.5f;
+        private const float FastPhaseDuration = 5f;
+        private const int MaxPerMinute = 50;
+        private const float OverheatSeconds = 15f;
+        private const float TpsBrokenSeconds = 5f;
+        private const int MaxInInventory = 3;
 
-        private const string BroadcastLag = "<color=red>Гранатомёт сломался... починка:  5 секунд</color>";
+        private static readonly Dictionary<string, float> SessionStart = new Dictionary<string, float>();
+        private static readonly Dictionary<string, float> NextShot = new Dictionary<string, float>();
+        private static readonly Dictionary<string, Queue<float>> ShotTimes = new Dictionary<string, Queue<float>>();
+        private static readonly Dictionary<string, float> OverheatUntil = new Dictionary<string, float>();
 
-        private readonly Dictionary<ushort, State> states = new Dictionary<ushort, State>();
-
-        private static bool dumped;
+        private readonly HashSet<string> firingNow = new HashSet<string>();
 
         private CoroutineHandle loop;
 
-        private float globalBlockUntil;
+        private float brokenUntil;
 
         public override uint Id { get; set; } = 3;
 
-        public override string Name { get; set; } = "Гранатомёт";
-
-        public override string Description { get; set; } = "Зажми стрельбу - летит очередь гранат. Перегревается.";
-
         public override ItemType Type { get; set; } = ItemType.MicroHID;
 
-        public override float Weight { get; set; } = 3f;
+        public override string Name { get; set; } = "Гранатомёт";
 
-        public override SpawnProperties SpawnProperties { get; set; } = new SpawnProperties
-        {
-            Limit = 0,
-            DynamicSpawnPoints = new List<DynamicSpawnPoint>(),
-        };
+        public override string Description { get; set; } = "МикроХИД, стреляющий гранатами";
 
-        public int MaxPerPlayer { get; set; } = 3;
+        public override float Weight { get; set; } = 25f;
 
-        public float FastRate { get; set; } = 5f;
-
-        public float FastPhaseSeconds { get; set; } = 5f;
-
-        public float SlowRate { get; set; } = 2f;
-
-        public int HeatLimit { get; set; } = 50;
-
-        public float OverheatSeconds { get; set; } = 15f;
-
-        public float HeatResetIdleSeconds { get; set; } = 6f;
-
-        public float GrenadeSpeed { get; set; } = 10f;
-
-        public float GrenadeFuse { get; set; } = 2.5f;
-
-        public float MinTps { get; set; } = 10f;
-
-        public float LagPauseSeconds { get; set; } = 5f;
+        public override SpawnProperties SpawnProperties { get; set; } = new SpawnProperties();
 
         protected override void SubscribeEvents()
         {
+            Exiled.Events.Handlers.Player.ChangingMicroHIDState += OnChangingPhase;
+            Exiled.Events.Handlers.Player.Hurting += OnHurting;
+            loop = Timing.RunCoroutine(FireLoop());
             base.SubscribeEvents();
-            loop = Timing.RunCoroutine(Loop(), "eventhud-grenadelauncher");
+            SpecDebug.Log("ГРАНАТОМЁТ: SubscribeEvents");
         }
 
         protected override void UnsubscribeEvents()
         {
+            Exiled.Events.Handlers.Player.ChangingMicroHIDState -= OnChangingPhase;
+            Exiled.Events.Handlers.Player.Hurting -= OnHurting;
             Timing.KillCoroutines(loop);
-            states.Clear();
+            firingNow.Clear();
             base.UnsubscribeEvents();
+            SpecDebug.Log("ГРАНАТОМЁТ: UnsubscribeEvents");
         }
 
         protected override void OnAcquired(Player player, Item item, bool displayMessage)
         {
             base.OnAcquired(player, item, displayMessage);
 
-            int count = 0;
-
-            foreach (Item owned in player.Items)
-            {
-                if (Check(owned))
-                    count++;
-            }
-
-            if (count <= MaxPerPlayer)
+            if (player == null || item == null)
                 return;
 
-            player.RemoveItem(item);
-            player.ShowHint("<color=red>Максимум " + MaxPerPlayer + " гранатомёта в инвентаре</color>", 4f);
-            SpecDebug.Log("ГРАНАТОМЁТ: отказ выдачи " + player.Nickname + ", уже есть " + MaxPerPlayer);
+            ushort serial = item.Serial;
+
+            Timing.CallDelayed(0.5f, () =>
+            {
+                try
+                {
+                    if (player == null || !player.IsConnected)
+                        return;
+
+                    int count = 0;
+
+                    foreach (Item it in player.Items)
+                    {
+                        if (Check(it))
+                            count++;
+                    }
+
+                    SpecDebug.Log("МИКРОХИД: у " + player.Nickname + " гранатомётов в инвентаре: " + count);
+
+                    if (count <= MaxInInventory)
+                        return;
+
+                    Item extra = null;
+
+                    foreach (Item it in player.Items)
+                    {
+                        if (it != null && it.Serial == serial)
+                        {
+                            extra = it;
+                            break;
+                        }
+                    }
+
+                    if (extra != null)
+                    {
+                        player.RemoveItem(extra);
+                        player.ShowHint("<color=red>Максимум 3 гранатомёта в инвентаре</color>", 3f);
+                        SpecDebug.Log("МИКРОХИД: лимит, удалён лишний serial " + serial);
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    SpecDebug.Log("МИКРОХИД лимит err: " + e.Message);
+                }
+            });
         }
 
-        private IEnumerator<float> Loop()
+        private void OnChangingPhase(ChangingMicroHIDStateEventArgs ev)
+        {
+            if (ev.Player == null || ev.MicroHID == null || !Check(ev.MicroHID))
+                return;
+
+            string id = ev.Player.UserId ?? ev.Player.Nickname;
+            SpecDebug.Log("МИКРОХИД " + ev.Player.Nickname + " фаза -> " + ev.NewPhase);
+
+            if (ev.NewPhase == MicroHidPhase.Firing)
+            {
+                float now = Time.time;
+
+                if (brokenUntil > now)
+                {
+                    ev.IsAllowed = false;
+                    return;
+                }
+
+                float until;
+
+                if (OverheatUntil.TryGetValue(id, out until) && until > now)
+                {
+                    ev.IsAllowed = false;
+                    return;
+                }
+
+                firingNow.Add(id);
+                SessionStart[id] = now;
+                NextShot[id] = now;
+            }
+            else
+            {
+                firingNow.Remove(id);
+            }
+        }
+
+        private void OnHurting(HurtingEventArgs ev)
+        {
+            if (ev.Attacker == null || ev.DamageHandler == null)
+                return;
+
+            if (ev.DamageHandler.Type != DamageType.MicroHid)
+                return;
+
+            if (!Check(ev.Attacker.CurrentItem))
+                return;
+
+            ev.IsAllowed = false;
+        }
+
+        private IEnumerator<float> FireLoop()
         {
             while (true)
             {
                 yield return Timing.WaitForSeconds(0.05f);
 
-                float now = Time.time;
-
                 try
                 {
-                    if (Server.Tps < MinTps && now >= globalBlockUntil)
-                    {
-                        globalBlockUntil = now + LagPauseSeconds;
-                        Map.Broadcast((ushort)LagPauseSeconds, BroadcastLag);
-                        SpecDebug.Log("ГРАНАТОМЁТ: TPS " + Server.Tps.ToString("0.0") + ", пауза " + LagPauseSeconds + "с");
-                    }
-
-                    if (now < globalBlockUntil)
-                        continue;
-
-                    foreach (Player player in Player.List)
-                    {
-                        if (player is null || !player.IsAlive)
-                            continue;
-
-                        Item current = player.CurrentItem;
-
-                        if (current is null || !Check(current))
-                            continue;
-
-                        Tick(player, current, now);
-                    }
+                    Tick();
                 }
                 catch (Exception e)
                 {
-                    SpecDebug.Log("ГРАНАТОМЁТ ошибка цикла: " + e.Message);
+                    SpecDebug.Log("МИКРОХИД loop err: " + e.Message);
                 }
             }
         }
 
-        private void Tick(Player player, Item item, float now)
+        private void Tick()
         {
-            State state;
+            float now = Time.time;
 
-            if (!states.TryGetValue(item.Serial, out state))
+            if (brokenUntil > now)
+                return;
+
+            if (Server.Tps <= 10f && firingNow.Count > 0)
             {
-                state = new State();
-                states[item.Serial] = state;
+                brokenUntil = now + TpsBrokenSeconds;
+                firingNow.Clear();
+                Map.Broadcast(5, "<color=red>Гранатомёт сломался... починка:  5 секунд</color>", global::Broadcast.BroadcastFlags.Normal, true);
+                SpecDebug.Log("МИКРОХИД: TPS " + Server.Tps.ToString("0.0") + ", пауза 5 сек");
+                return;
             }
 
-            if (now < state.OverheatUntil)
-            {
-                int left = Mathf.CeilToInt(state.OverheatUntil - now);
+            if (firingNow.Count == 0)
+                return;
 
-                if (left != state.LastShownSecond)
+            List<string> ids = firingNow.ToList();
+
+            foreach (string id in ids)
+            {
+                Player player = Player.List.FirstOrDefault(p => (p.UserId ?? p.Nickname) == id);
+
+                if (player == null || !player.IsAlive || !Check(player.CurrentItem))
                 {
-                    state.LastShownSecond = left;
-                    player.Broadcast(1, string.Format(BroadcastOverheat, left), global::Broadcast.BroadcastFlags.Normal, true);
+                    firingNow.Remove(id);
+                    continue;
                 }
 
-                return;
-            }
+                MicroHid micro = player.CurrentItem as MicroHid;
 
-            bool firing = IsFiring(item);
-
-            if (!firing)
-            {
-                if (state.FiringSince > 0f && now - state.LastShot > HeatResetIdleSeconds)
+                if (micro != null)
                 {
-                    state.FiringSince = 0f;
-                    state.Heat = 0;
+                    try { micro.Energy = 1f; } catch { }
                 }
 
-                return;
+                float next;
+                NextShot.TryGetValue(id, out next);
+
+                if (now < next)
+                    continue;
+
+                Queue<float> q;
+
+                if (!ShotTimes.TryGetValue(id, out q))
+                {
+                    q = new Queue<float>();
+                    ShotTimes[id] = q;
+                }
+
+                while (q.Count > 0 && now - q.Peek() > 60f)
+                    q.Dequeue();
+
+                if (q.Count >= MaxPerMinute)
+                {
+                    OverheatUntil[id] = now + OverheatSeconds;
+                    firingNow.Remove(id);
+                    Timing.RunCoroutine(OverheatBroadcast(player, id));
+                    SpecDebug.Log("МИКРОХИД: перегрев у " + player.Nickname);
+                    continue;
+                }
+
+                float started;
+                SessionStart.TryGetValue(id, out started);
+
+                float interval = now - started <= FastPhaseDuration ? FastInterval : SlowInterval;
+                NextShot[id] = now + interval;
+                q.Enqueue(now);
+                FireGrenade(player);
             }
-
-            if (state.FiringSince <= 0f)
-                state.FiringSince = now;
-
-            float held = now - state.FiringSince;
-            float rate = held <= FastPhaseSeconds ? FastRate : SlowRate;
-            float interval = 1f / rate;
-
-            if (now - state.LastShot < interval)
-                return;
-
-            state.LastShot = now;
-            state.Heat++;
-
-            Fire(player);
-
-            if (state.Heat < HeatLimit)
-                return;
-
-            state.Heat = 0;
-            state.FiringSince = 0f;
-            state.OverheatUntil = now + OverheatSeconds;
-            state.LastShownSecond = -1;
-            SpecDebug.Log("ГРАНАТОМЁТ: перегрев у " + player.Nickname);
         }
 
-        private void Fire(Player player)
+        private IEnumerator<float> OverheatBroadcast(Player player, string id)
+        {
+            while (player != null && player.IsConnected)
+            {
+                float until;
+
+                if (!OverheatUntil.TryGetValue(id, out until))
+                    yield break;
+
+                float remain = until - Time.time;
+
+                if (remain <= 0f)
+                {
+                    player.Broadcast(2, "<color=green>МикроХИД остыл</color>", global::Broadcast.BroadcastFlags.Normal, true);
+                    yield break;
+                }
+
+                player.Broadcast(1, "<color=orange>МикроХИД перегрелся! Ждать: " + Mathf.CeilToInt(remain) + " сек</color>", global::Broadcast.BroadcastFlags.Normal, true);
+                yield return Timing.WaitForSeconds(1f);
+            }
+        }
+
+        private void FireGrenade(Player player)
         {
             try
             {
-                Vector3 direction = player.CameraTransform.forward;
                 Projectile projectile = player.ThrowGrenade(ProjectileType.FragGrenade, false).Projectile;
-
-                if (projectile is null)
-                    return;
-
-                projectile.Position = player.CameraTransform.position + (direction * 0.8f);
 
                 TimeGrenadeProjectile timed = projectile as TimeGrenadeProjectile;
 
-                if (!(timed is null))
-                    timed.FuseTime = GrenadeFuse;
+                if (timed != null)
+                    timed.FuseTime = 3f;
 
-                projectile.GameObject.AddComponent<NoPhysicsProjectile>();
+                Vector3 direction = player.CameraTransform.forward;
+                projectile.Position = player.CameraTransform.position + direction * 0.7f;
 
                 Rigidbody body = projectile.GameObject.GetComponent<Rigidbody>();
 
-                if (!(body is null))
+                if (body != null)
                 {
-                    body.useGravity = true;
                     body.velocity = direction * GrenadeSpeed;
+                    body.angularVelocity = Vector3.zero;
                 }
+
+                projectile.GameObject.AddComponent<NoPhysicsProjectile>();
             }
             catch (Exception e)
             {
-                SpecDebug.Log("ГРАНАТОМЁТ ошибка выстрела: " + e.Message);
+                SpecDebug.Log("МИКРОХИД выстрел err: " + e.Message);
             }
-        }
-
-        private static bool IsFiring(Item item)
-        {
-            try
-            {
-                object baseItem = item.Base;
-
-                if (baseItem is null)
-                    return false;
-
-                System.Type type = baseItem.GetType();
-                bool result = false;
-
-                foreach (PropertyInfo property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
-                {
-                    if (!property.PropertyType.IsEnum || property.GetIndexParameters().Length > 0)
-                        continue;
-
-                    object value = null;
-
-                    try
-                    {
-                        value = property.GetValue(baseItem, null);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-
-                    if (value is null)
-                        continue;
-
-                    string text = value.ToString();
-
-                    if (!dumped)
-                        SpecDebug.Log("MICROHID DUMP prop " + property.Name + " = " + text);
-
-                    if (Looks(text))
-                        result = true;
-                }
-
-                foreach (FieldInfo field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                {
-                    if (!field.FieldType.IsEnum)
-                        continue;
-
-                    object value = null;
-
-                    try
-                    {
-                        value = field.GetValue(baseItem);
-                    }
-                    catch
-                    {
-                        continue;
-                    }
-
-                    if (value is null)
-                        continue;
-
-                    string text = value.ToString();
-
-                    if (!dumped)
-                        SpecDebug.Log("MICROHID DUMP field " + field.Name + " = " + text);
-
-                    if (Looks(text))
-                        result = true;
-                }
-
-                if (!dumped)
-                {
-                    dumped = true;
-                    SpecDebug.Log("MICROHID DUMP тип = " + type.FullName + " (если стрельба не ловится - пришли эти строки)");
-                }
-
-                return result;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool Looks(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return false;
-
-            if (text.IndexOf("Firing", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-
-            if (text.IndexOf("Fired", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-
-            if (text.IndexOf("Shooting", StringComparison.OrdinalIgnoreCase) >= 0)
-                return true;
-
-            return false;
-        }
-
-        private sealed class State
-        {
-            public float FiringSince;
-
-            public float LastShot;
-
-            public int Heat;
-
-            public float OverheatUntil;
-
-            public int LastShownSecond = -1;
         }
     }
 }

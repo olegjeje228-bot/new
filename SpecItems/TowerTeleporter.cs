@@ -1,7 +1,6 @@
 namespace EventHUD.SpecItems
 {
     using System.Collections.Generic;
-    using Exiled.API.Enums;
     using Exiled.API.Features;
     using Exiled.API.Features.Attributes;
     using Exiled.API.Features.Spawn;
@@ -12,40 +11,48 @@ namespace EventHUD.SpecItems
     [CustomItem(ItemType.GunCOM15)]
     public sealed class TowerTeleporter : CustomWeapon
     {
-        private readonly Dictionary<ushort, bool> aiming = new Dictionary<ushort, bool>();
+        public static readonly Vector3 TowerPosition = new Vector3(39f, 314f, -31f);
 
-        private readonly Dictionary<string, Vector3> returnPoints = new Dictionary<string, Vector3>();
+        private const float UseCooldown = 1f;
 
-        private readonly HashSet<string> lockedByGun = new HashSet<string>();
+        private static readonly Dictionary<string, Vector3> ReturnPoints = new Dictionary<string, Vector3>();
+
+        private static readonly HashSet<string> LockedByGun = new HashSet<string>();
+
+        private static readonly Dictionary<string, float> LastUse = new Dictionary<string, float>();
+
+        private readonly HashSet<ushort> adsSerials = new HashSet<ushort>();
 
         public override uint Id { get; set; } = 2;
 
-        public override string Name { get; set; } = "Телепортер в башню";
+        public override string Name { get; set; } = "Телепортер";
 
-        public override string Description { get; set; } = "Выстрел - телепорт в башню и обратно. С прицелом - ещё и блокировка инвентаря.";
-
-        public override ItemType Type { get; set; } = ItemType.GunCOM15;
+        public override string Description { get; set; } = "Телепорт в башню и обратно";
 
         public override float Weight { get; set; } = 0.6f;
+
+        public override SpawnProperties SpawnProperties { get; set; } = new SpawnProperties();
 
         public override float Damage { get; set; } = 0f;
 
         public override byte ClipSize { get; set; } = 24;
 
-        public override SpawnProperties SpawnProperties { get; set; } = new SpawnProperties
+        public static void ResetState()
         {
-            Limit = 0,
-            DynamicSpawnPoints = new List<DynamicSpawnPoint>(),
-        };
-
-        public Vector3 TowerPosition { get; set; } = new Vector3(39f, 314f, -31f);
+            ReturnPoints.Clear();
+            LockedByGun.Clear();
+            LastUse.Clear();
+        }
 
         public void OnAimingDownSight(AimingDownSightEventArgs ev)
         {
-            if (ev.Firearm is null)
+            if (ev.Firearm == null || !Check(ev.Firearm))
                 return;
 
-            aiming[ev.Firearm.Serial] = ev.AdsIn;
+            if (ev.AdsIn)
+                adsSerials.Add(ev.Firearm.Serial);
+            else
+                adsSerials.Remove(ev.Firearm.Serial);
         }
 
         protected override void OnShooting(ShootingEventArgs ev)
@@ -54,45 +61,47 @@ namespace EventHUD.SpecItems
 
             Player player = ev.Player;
 
-            if (player is null || string.IsNullOrEmpty(player.UserId))
+            if (player == null || !player.IsAlive || ev.Firearm == null)
                 return;
 
-            bool ads = false;
+            string id = player.UserId ?? player.Nickname;
+            float now = Time.time;
+            float last;
 
-            if (!(ev.Firearm is null) && aiming.TryGetValue(ev.Firearm.Serial, out bool stored))
-                ads = stored;
+            if (LastUse.TryGetValue(id, out last) && now - last < UseCooldown)
+                return;
 
-            bool alreadyInTower = returnPoints.ContainsKey(player.UserId);
+            LastUse[id] = now;
 
-            if (alreadyInTower)
+            Vector3 back;
+
+            if (ReturnPoints.TryGetValue(id, out back))
             {
-                Vector3 back = returnPoints[player.UserId];
-                returnPoints.Remove(player.UserId);
-                player.Position = back;
+                ReturnPoints.Remove(id);
+                player.Position = back + Vector3.up * 0.1f;
 
-                if (lockedByGun.Remove(player.UserId))
+                if (LockedByGun.Remove(id))
                     InventoryLock.Unlock(player);
 
-                player.ShowHint("<color=yellow>Возврат на исходную позицию</color>", 3f);
-                SpecDebug.Log("ТЕЛЕПОРТЕР: " + player.Nickname + " вернулся");
-                return;
-            }
-
-            returnPoints[player.UserId] = player.Position;
-            player.Position = TowerPosition;
-
-            if (ads)
-            {
-                lockedByGun.Add(player.UserId);
-                InventoryLock.Lock(player);
-                player.ShowHint("<color=red>Башня. Инвентарь заблокирован</color>", 4f);
+                player.ShowHint("<color=green>Возврат</color>", 2f);
+                SpecDebug.Log("ТЕЛЕПОРТЕР: возврат " + player.Nickname);
             }
             else
             {
-                player.ShowHint("<color=yellow>Башня</color>", 3f);
-            }
+                bool ads = adsSerials.Contains(ev.Firearm.Serial);
 
-            SpecDebug.Log("ТЕЛЕПОРТЕР: " + player.Nickname + " в башню, блокировка=" + ads);
+                ReturnPoints[id] = player.Position;
+                player.Position = TowerPosition;
+
+                if (ads)
+                {
+                    LockedByGun.Add(id);
+                    InventoryLock.Lock(player, ev.Firearm.Serial);
+                }
+
+                player.ShowHint("<color=yellow>Башня. Выстрел из телепортера - возврат</color>", 3f);
+                SpecDebug.Log("ТЕЛЕПОРТЕР: " + player.Nickname + " -> башня, ads=" + ads + ", serial=" + ev.Firearm.Serial);
+            }
         }
     }
 }

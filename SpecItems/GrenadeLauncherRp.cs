@@ -2,6 +2,7 @@ namespace EventHUD.SpecItems
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using Exiled.API.Enums;
     using Exiled.API.Features;
     using Exiled.API.Features.Attributes;
@@ -17,97 +18,100 @@ namespace EventHUD.SpecItems
     [CustomItem(ItemType.GunShotgun)]
     public sealed class GrenadeLauncherRp : CustomWeapon
     {
-        private readonly Dictionary<ushort, bool> aiming = new Dictionary<ushort, bool>();
+        private const int MaxLoaded = 6;
+        private const float NormalSpeed = 5f;
+        private const float AdsSpeed = 15f;
+        private const float FuseSeconds = 3f;
 
-        private readonly Dictionary<ushort, int> loaded = new Dictionary<ushort, int>();
+        private static readonly Dictionary<ushort, int> Loaded = new Dictionary<ushort, int>();
 
-        private readonly HashSet<ushort> reloading = new HashSet<ushort>();
+        private readonly HashSet<ushort> adsSerials = new HashSet<ushort>();
+
+        private readonly HashSet<ushort> reloadingNow = new HashSet<ushort>();
 
         public override uint Id { get; set; } = 4;
 
         public override string Name { get; set; } = "ГранатомётРП";
 
-        public override string Description { get; set; } = "Заряжается гранатами. С прицелом - двойной усиленный заряд.";
+        public override string Description { get; set; } = "Дробовик, заряжаемый гранатами";
 
-        public override ItemType Type { get; set; } = ItemType.GunShotgun;
+        public override float Weight { get; set; } = 2.5f;
 
-        public override float Weight { get; set; } = 2f;
+        public override SpawnProperties SpawnProperties { get; set; } = new SpawnProperties();
 
         public override float Damage { get; set; } = 0f;
 
         public override byte ClipSize { get; set; } = 6;
 
-        public override SpawnProperties SpawnProperties { get; set; } = new SpawnProperties
-        {
-            Limit = 0,
-            DynamicSpawnPoints = new List<DynamicSpawnPoint>(),
-        };
-
-        public int StartLoaded { get; set; } = 2;
-
-        public float ReloadInterval { get; set; } = 0.7f;
-
-        public float NormalSpeed { get; set; } = 5f;
-
-        public float AimingSpeed { get; set; } = 15f;
-
-        public float NormalRecoil { get; set; } = 5f;
-
-        public float AimingRecoil { get; set; } = 10f;
-
-        public float FuseTime { get; set; } = 30f;
-
-        public float ShotSoundVolume { get; set; } = 2f;
-
-        public float ShotSoundRange { get; set; } = 20f;
-
-        public float BlastSoundVolume { get; set; } = 5f;
-
-        public float NearRadius { get; set; } = 5f;
-
-        public float FarRadius { get; set; } = 10f;
-
-        public float NearDamage { get; set; } = 30f;
-
-        public float FarDamage { get; set; } = 2f;
-
         public void OnAimingDownSight(AimingDownSightEventArgs ev)
         {
-            if (ev.Firearm is null)
+            if (ev.Firearm == null || !Check(ev.Firearm))
                 return;
 
-            aiming[ev.Firearm.Serial] = ev.AdsIn;
-        }
-
-        protected override void OnAcquired(Player player, Item item, bool displayMessage)
-        {
-            base.OnAcquired(player, item, displayMessage);
-
-            Firearm firearm = item as Firearm;
-
-            if (firearm is null)
-                return;
-
-            if (!loaded.ContainsKey(firearm.Serial))
-                loaded[firearm.Serial] = StartLoaded;
-
-            Refresh(firearm);
+            if (ev.AdsIn)
+                adsSerials.Add(ev.Firearm.Serial);
+            else
+                adsSerials.Remove(ev.Firearm.Serial);
         }
 
         protected override void OnReloading(ReloadingWeaponEventArgs ev)
         {
             ev.IsAllowed = false;
 
-            Firearm firearm = ev.Firearm;
-
-            if (firearm is null)
+            if (ev.Player == null || ev.Firearm == null)
                 return;
 
-            if (reloading.Contains(firearm.Serial))
+            if (reloadingNow.Contains(ev.Firearm.Serial))
                 return;
 
-            reloading.Add(firearm.Serial);
-            Timing.RunCoroutine(ReloadOneByOne(ev.Player, firearm));
+            Timing.RunCoroutine(ReloadOneByOne(ev.Player, ev.Firearm.Serial));
+        }
+
+        private IEnumerator<float> ReloadOneByOne(Player player, ushort serial)
+        {
+            reloadingNow.Add(serial);
+
+            while (true)
+            {
+                if (player == null || !player.IsAlive || player.CurrentItem == null || player.CurrentItem.Serial != serial)
+                    break;
+
+                int count;
+                Loaded.TryGetValue(serial, out count);
+
+                if (count >= MaxLoaded)
+                {
+                    player.ShowHint("Заряжен полностью: " + count + "/" + MaxLoaded, 2f);
+                    break;
+                }
+
+                Item grenade = player.Items.FirstOrDefault(i => i.Type == ItemType.GrenadeHE);
+
+                if (grenade == null)
+                {
+                    player.ShowHint("<color=yellow>Нет гранат в инвентаре</color>", 2f);
+                    break;
+                }
+
+                yield return Timing.WaitForSeconds(0.9f);
+
+                if (player == null || !player.IsAlive || player.CurrentItem == null || player.CurrentItem.Serial != serial)
+                    break;
+
+                grenade = player.Items.FirstOrDefault(i => i.Type == ItemType.GrenadeHE);
+
+                if (grenade == null)
+                    break;
+
+                player.RemoveItem(grenade);
+                Loaded.TryGetValue(serial, out count);
+                count++;
+                Loaded[serial] = count;
+                player.ShowHint("Заряжено: " + count + "/" + MaxLoaded, 1.5f);
+                SpecDebug.Log("ГРП: заряжено " + count + "/" + MaxLoaded + " у " + player.Nickname);
+            }
+
+            reloadingNow.Remove(serial);
         }
 
         protected override void OnShooting(ShootingEventArgs ev)
@@ -115,296 +119,202 @@ namespace EventHUD.SpecItems
             ev.IsAllowed = false;
 
             Player player = ev.Player;
-            Firearm firearm = ev.Firearm;
 
-            if (player is null || firearm is null)
+            if (player == null || ev.Firearm == null)
                 return;
 
-            int ammo = GetLoaded(firearm);
+            ushort serial = ev.Firearm.Serial;
+            int count;
+            Loaded.TryGetValue(serial, out count);
 
-            if (ammo <= 0)
+            if (count <= 0)
             {
-                player.ShowHint("Пусто. Нажми R и заряди гранатами", 2f);
-                Refresh(firearm);
+                player.ShowHint("<color=yellow>Пусто! Перезарядка: R (нужны гранаты)</color>", 2f);
                 return;
             }
 
-            bool ads = aiming.TryGetValue(firearm.Serial, out bool stored) && stored;
+            bool ads = adsSerials.Contains(serial);
+            Vector3 direction = player.CameraTransform.forward;
 
-            loaded[firearm.Serial] = ammo - 1;
-            Refresh(firearm);
+            SpecAudio.PlayAt(player.Position, "granatomet.ogg", 2f, 20f);
 
-            SpecAudio.PlayAt(player.Position, "granatomet.ogg", ShotSoundVolume, ShotSoundRange);
+            if (ads && count >= 2)
+            {
+                Loaded[serial] = count - 2;
+                FireOne(player, Quaternion.AngleAxis(-1.5f, player.CameraTransform.up) * direction, AdsSpeed, true);
+                FireOne(player, Quaternion.AngleAxis(1.5f, player.CameraTransform.up) * direction, AdsSpeed, true);
+                Recoil(player, 10f);
+            }
+            else
+            {
+                Loaded[serial] = count - 1;
+                float speed = ads ? AdsSpeed : NormalSpeed;
+                FireOne(player, direction, speed, ads);
+                Recoil(player, ads ? 10f : 5f);
+            }
 
-            int shots = ads ? 2 : 1;
-            float speed = ads ? AimingSpeed : NormalSpeed;
-
-            for (int i = 0; i < shots; i++)
-                Launch(player, speed, ads, i * 0.12f);
-
-            ApplyRecoil(player, ads ? AimingRecoil : NormalRecoil);
+            SpecDebug.Log("ГРП: выстрел, ads=" + ads + ", осталось " + Loaded[serial]);
         }
 
-        private void Launch(Player player, float speed, bool ads, float spread)
+        private static void FireOne(Player player, Vector3 direction, float speed, bool ads)
         {
             try
             {
-                Vector3 direction = player.CameraTransform.forward;
-
-                if (spread > 0f)
-                    direction = Quaternion.Euler(-spread * 10f, 0f, 0f) * direction;
-
                 Projectile projectile = player.ThrowGrenade(ProjectileType.FragGrenade, false).Projectile;
-
-                if (projectile is null)
-                    return;
-
-                projectile.Position = player.CameraTransform.position + (direction * 0.8f);
 
                 TimeGrenadeProjectile timed = projectile as TimeGrenadeProjectile;
 
-                if (!(timed is null))
-                    timed.FuseTime = FuseTime;
+                if (timed != null)
+                    timed.FuseTime = FuseSeconds;
 
-                projectile.GameObject.AddComponent<NoPhysicsProjectile>();
+                projectile.Position = player.CameraTransform.position + direction * 0.7f;
 
                 Rigidbody body = projectile.GameObject.GetComponent<Rigidbody>();
 
-                if (!(body is null))
+                if (body != null)
                 {
-                    body.useGravity = true;
                     body.velocity = direction * speed;
+                    body.angularVelocity = Vector3.zero;
                 }
 
-                DoorBlast blast = projectile.GameObject.AddComponent<DoorBlast>();
-                blast.Init(projectile, player, ads, this);
+                projectile.GameObject.AddComponent<NoPhysicsProjectile>();
+
+                DoorDetonator detonator = projectile.GameObject.AddComponent<DoorDetonator>();
+                detonator.Init(projectile, player, ads);
             }
             catch (Exception e)
             {
-                SpecDebug.Log("ГРАНАТОМЁТРП ошибка выстрела: " + e.Message);
+                SpecDebug.Log("ГРП выстрел err: " + e.Message);
             }
         }
 
-        public void Detonate(Vector3 position, Player shooter, bool ads, Door door)
-        {
-            if (ads)
-                SpecAudio.PlayAt(position, "granatomet1.ogg", BlastSoundVolume, ShotSoundRange);
-
-            foreach (Player victim in Player.List)
-            {
-                if (victim is null || !victim.IsAlive)
-                    continue;
-
-                float distance = Vector3.Distance(victim.Position, position);
-
-                if (distance > FarRadius)
-                    continue;
-
-                float damage;
-
-                if (distance <= NearRadius)
-                {
-                    damage = NearDamage;
-                }
-                else
-                {
-                    float t = (distance - NearRadius) / (FarRadius - NearRadius);
-                    damage = Mathf.Lerp(NearDamage, FarDamage, t);
-                }
-
-                if (ads)
-                    damage *= 2f;
-
-                try
-                {
-                    victim.Hurt(damage, DamageType.Explosion);
-                }
-                catch
-                {
-                    victim.Hurt(damage);
-                }
-            }
-
-            BreakableDoor breakable = door as BreakableDoor;
-
-            if (!(breakable is null))
-            {
-                try
-                {
-                    breakable.Break();
-                }
-                catch
-                {
-                }
-            }
-
-            SpecDebug.Log("ГРАНАТОМЁТРП: взрыв на двери, ads=" + ads);
-        }
-
-        private IEnumerator<float> ReloadOneByOne(Player player, Firearm firearm)
-        {
-            try
-            {
-                while (true)
-                {
-                    if (player is null || !player.IsConnected)
-                        yield break;
-
-                    if (GetLoaded(firearm) >= ClipSize)
-                        yield break;
-
-                    Item grenade = FindGrenade(player);
-
-                    if (grenade is null)
-                    {
-                        player.ShowHint("Нет гранат в инвентаре", 2f);
-                        yield break;
-                    }
-
-                    player.RemoveItem(grenade);
-                    loaded[firearm.Serial] = GetLoaded(firearm) + 1;
-                    Refresh(firearm);
-
-                    yield return Timing.WaitForSeconds(ReloadInterval);
-                }
-            }
-            finally
-            {
-                reloading.Remove(firearm.Serial);
-            }
-        }
-
-        private static Item FindGrenade(Player player)
-        {
-            foreach (Item item in player.Items)
-            {
-                if (item.Type == ItemType.GrenadeHE)
-                    return item;
-            }
-
-            return null;
-        }
-
-        private int GetLoaded(Firearm firearm)
-        {
-            if (loaded.TryGetValue(firearm.Serial, out int value))
-                return value;
-
-            loaded[firearm.Serial] = StartLoaded;
-            return StartLoaded;
-        }
-
-        private void Refresh(Firearm firearm)
-        {
-            int value = GetLoaded(firearm);
-
-            if (value < 0)
-                value = 0;
-
-            if (value > ClipSize)
-                value = ClipSize;
-
-            firearm.MaxMagazineAmmo = ClipSize;
-            firearm.MagazineAmmo = (byte)value;
-        }
-
-        private static void ApplyRecoil(Player player, float degrees)
+        private static void Recoil(Player player, float degreesUp)
         {
             try
             {
                 Vector3 angles = player.CameraTransform.rotation.eulerAngles;
-                player.Rotation = Quaternion.Euler(angles.x - degrees, angles.y, 0f);
+                player.Rotation = Quaternion.Euler(angles.x - degreesUp, angles.y, angles.z);
             }
             catch (Exception e)
             {
-                SpecDebug.Log("Отдача не применилась: " + e.Message);
+                SpecDebug.Log("ГРП recoil err: " + e.Message);
             }
         }
+    }
 
-        public sealed class DoorBlast : MonoBehaviour
+    public sealed class DoorDetonator : MonoBehaviour
+    {
+        private Exiled.API.Features.Pickups.Projectiles.Projectile projectile;
+
+        private Exiled.API.Features.Player attacker;
+
+        private bool ads;
+
+        private bool done;
+
+        public void Init(Exiled.API.Features.Pickups.Projectiles.Projectile proj, Exiled.API.Features.Player shooter, bool aimed)
         {
-            private Projectile projectile;
+            projectile = proj;
+            attacker = shooter;
+            ads = aimed;
+        }
 
-            private Player shooter;
+        private void OnCollisionEnter(Collision collision)
+        {
+            if (collision != null && collision.collider != null)
+                TryDoor(collision.collider);
+        }
 
-            private GrenadeLauncherRp owner;
+        private void OnTriggerEnter(Collider other)
+        {
+            TryDoor(other);
+        }
 
-            private bool ads;
+        private void TryDoor(Collider collider)
+        {
+            if (done || collider == null)
+                return;
 
-            private bool done;
+            Interactables.Interobjects.DoorUtils.DoorVariant doorVariant =
+                collider.GetComponentInParent<Interactables.Interobjects.DoorUtils.DoorVariant>();
 
-            private float armedAt;
+            if (doorVariant == null)
+                return;
 
-            public void Init(Projectile projectile, Player shooter, bool ads, GrenadeLauncherRp owner)
+            done = true;
+            Vector3 position = transform.position;
+            SpecDebug.Log("ГРП: контакт с дверью, мгновенная детонация");
+
+            try
             {
-                this.projectile = projectile;
-                this.shooter = shooter;
-                this.ads = ads;
-                this.owner = owner;
-                armedAt = Time.time + 0.05f;
+                Door door = Door.Get(doorVariant);
+                BreakableDoor breakable = door as BreakableDoor;
+
+                if (breakable != null && !breakable.IsDestroyed)
+                    breakable.Break();
+            }
+            catch (Exception e)
+            {
+                SpecDebug.Log("ГРП: поломка двери err " + e.Message);
             }
 
-            private void OnCollisionEnter(Collision collision)
+            foreach (Player target in Player.List)
             {
-                Check(collision.collider);
-            }
+                if (target == null || !target.IsAlive)
+                    continue;
 
-            private void OnTriggerEnter(Collider other)
-            {
-                Check(other);
-            }
+                float distance = Vector3.Distance(target.Position, position);
 
-            private void Check(Collider collider)
-            {
-                if (done || Time.time < armedAt || collider is null)
-                    return;
+                if (distance > 10f)
+                    continue;
 
-                Door door = NearestDoor(transform.position, 2.5f);
-
-                if (door is null)
-                    return;
-
-                done = true;
+                float damage = distance <= 5f ? 30f : Mathf.Lerp(30f, 2f, (distance - 5f) / 5f);
 
                 try
                 {
-                    owner.Detonate(transform.position, shooter, ads, door);
-
-                    TimeGrenadeProjectile timed = projectile as TimeGrenadeProjectile;
-
-                    if (!(timed is null) && !timed.IsAlreadyDetonated)
-                        timed.Explode();
+                    target.Hurt(attacker, damage, DamageType.Explosion);
+                    SpecDebug.Log("ГРП: урон " + damage.ToString("0") + " -> " + target.Nickname + " (" + distance.ToString("0.0") + " м)");
                 }
                 catch (Exception e)
                 {
-                    SpecDebug.Log("DoorBlast ошибка: " + e.Message);
+                    SpecDebug.Log("ГРП: урон err " + e.Message);
                 }
             }
 
-            private static Door NearestDoor(Vector3 point, float maxDistance)
+            try
             {
-                Door best = null;
-                float bestDistance = float.MaxValue;
-
-                foreach (Door door in Door.List)
-                {
-                    if (door is null)
-                        continue;
-
-                    float distance = Vector3.Distance(door.Position, point);
-
-                    if (distance < bestDistance)
-                    {
-                        bestDistance = distance;
-                        best = door;
-                    }
-                }
-
-                if (bestDistance > maxDistance)
-                    return null;
-
-                return best;
+                Map.ExplodeEffect(position, ProjectileType.FragGrenade);
             }
+            catch (Exception e)
+            {
+                SpecDebug.Log("ГРП: эффект err " + e.Message);
+            }
+
+            if (ads)
+                SpecAudio.PlayAt(position, "granatomet1.ogg", 5f, 20f);
+
+            try
+            {
+                if (projectile != null)
+                    projectile.Destroy();
+                else
+                    Destroy(gameObject);
+            }
+            catch
+            {
+                Destroy(gameObject);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (done)
+                return;
+
+            done = true;
+
+            if (ads)
+                SpecAudio.PlayAt(transform.position, "granatomet1.ogg", 5f, 20f);
         }
     }
 }

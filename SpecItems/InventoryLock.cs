@@ -6,127 +6,128 @@ namespace EventHUD.SpecItems
 
     public static class InventoryLock
     {
-        private static readonly HashSet<string> LockedIds = new HashSet<string>();
-
-        private static bool subscribed;
+        private static readonly Dictionary<string, ushort> Locked = new Dictionary<string, ushort>();
 
         public static bool IsLocked(Player player)
         {
-            return !(player is null) && !string.IsNullOrEmpty(player.UserId) && LockedIds.Contains(player.UserId);
+            if (player == null)
+                return false;
+
+            return Locked.ContainsKey(player.UserId ?? player.Nickname);
         }
 
-        public static void Lock(Player player)
+        public static void Lock(Player player, ushort allowedSerial)
         {
-            if (player is null || string.IsNullOrEmpty(player.UserId))
+            if (player == null)
                 return;
 
-            LockedIds.Add(player.UserId);
+            string id = player.UserId ?? player.Nickname;
+            Locked[id] = allowedSerial;
 
-            try
-            {
+            if (player.CurrentItem != null && player.CurrentItem.Serial != allowedSerial)
                 player.CurrentItem = null;
-            }
-            catch
-            {
-            }
 
-            SpecDebug.Log("LOCK инвентарь: " + player.Nickname);
+            player.ShowHint("<color=red>Инвентарь заблокирован. Выстрел из телепортера - возврат</color>", 4f);
+            SpecDebug.Log("ЛОК: " + player.Nickname + " заблокирован, разрешён serial " + allowedSerial);
         }
 
         public static void Unlock(Player player)
         {
-            if (player is null || string.IsNullOrEmpty(player.UserId))
+            if (player == null)
                 return;
 
-            LockedIds.Remove(player.UserId);
-            SpecDebug.Log("UNLOCK инвентарь: " + player.Nickname);
+            string id = player.UserId ?? player.Nickname;
+
+            if (Locked.Remove(id))
+            {
+                player.ShowHint("<color=green>Инвентарь разблокирован</color>", 2f);
+                SpecDebug.Log("ЛОК: " + player.Nickname + " разблокирован");
+            }
         }
 
         public static void Enable()
         {
-            if (subscribed)
-                return;
-
-            subscribed = true;
-
             Exiled.Events.Handlers.Player.ChangingItem += OnChangingItem;
             Exiled.Events.Handlers.Player.DroppingItem += OnDroppingItem;
             Exiled.Events.Handlers.Player.DroppingAmmo += OnDroppingAmmo;
             Exiled.Events.Handlers.Player.PickingUpItem += OnPickingUpItem;
-            Exiled.Events.Handlers.Player.ReloadingWeapon += OnReloading;
+            Exiled.Events.Handlers.Player.ReloadingWeapon += OnReloadingWeapon;
             Exiled.Events.Handlers.Player.Shooting += OnShooting;
             Exiled.Events.Handlers.Player.Left += OnLeft;
+            Exiled.Events.Handlers.Player.Died += OnDied;
+            Exiled.Events.Handlers.Server.RoundStarted += OnRoundStarted;
+            SpecDebug.Log("ЛОК: система включена");
         }
 
         public static void Disable()
         {
-            if (!subscribed)
-                return;
-
-            subscribed = false;
-
             Exiled.Events.Handlers.Player.ChangingItem -= OnChangingItem;
             Exiled.Events.Handlers.Player.DroppingItem -= OnDroppingItem;
             Exiled.Events.Handlers.Player.DroppingAmmo -= OnDroppingAmmo;
             Exiled.Events.Handlers.Player.PickingUpItem -= OnPickingUpItem;
-            Exiled.Events.Handlers.Player.ReloadingWeapon -= OnReloading;
+            Exiled.Events.Handlers.Player.ReloadingWeapon -= OnReloadingWeapon;
             Exiled.Events.Handlers.Player.Shooting -= OnShooting;
             Exiled.Events.Handlers.Player.Left -= OnLeft;
-
-            LockedIds.Clear();
+            Exiled.Events.Handlers.Player.Died -= OnDied;
+            Exiled.Events.Handlers.Server.RoundStarted -= OnRoundStarted;
+            Locked.Clear();
         }
 
-        private static void Deny(Player player)
+        private static bool TryGetAllowed(Player player, out ushort allowedSerial)
         {
-            if (!(player is null))
-                player.ShowHint("<color=red>Инвентарь заблокирован</color>", 1.5f);
+            allowedSerial = 0;
+
+            if (player == null)
+                return false;
+
+            return Locked.TryGetValue(player.UserId ?? player.Nickname, out allowedSerial);
         }
 
         private static void OnChangingItem(ChangingItemEventArgs ev)
         {
-            if (!IsLocked(ev.Player))
+            ushort allowed;
+
+            if (!TryGetAllowed(ev.Player, out allowed))
+                return;
+
+            if (ev.Item != null && ev.Item.Serial == allowed)
                 return;
 
             ev.IsAllowed = false;
-            Deny(ev.Player);
         }
 
         private static void OnDroppingItem(DroppingItemEventArgs ev)
         {
-            if (!IsLocked(ev.Player))
-                return;
-
-            ev.IsAllowed = false;
-            Deny(ev.Player);
+            if (IsLocked(ev.Player))
+                ev.IsAllowed = false;
         }
 
         private static void OnDroppingAmmo(DroppingAmmoEventArgs ev)
         {
-            if (!IsLocked(ev.Player))
-                return;
-
-            ev.IsAllowed = false;
+            if (IsLocked(ev.Player))
+                ev.IsAllowed = false;
         }
 
         private static void OnPickingUpItem(PickingUpItemEventArgs ev)
         {
-            if (!IsLocked(ev.Player))
-                return;
-
-            ev.IsAllowed = false;
+            if (IsLocked(ev.Player))
+                ev.IsAllowed = false;
         }
 
-        private static void OnReloading(ReloadingWeaponEventArgs ev)
+        private static void OnReloadingWeapon(ReloadingWeaponEventArgs ev)
         {
-            if (!IsLocked(ev.Player))
-                return;
-
-            ev.IsAllowed = false;
+            if (IsLocked(ev.Player))
+                ev.IsAllowed = false;
         }
 
         private static void OnShooting(ShootingEventArgs ev)
         {
-            if (!IsLocked(ev.Player))
+            ushort allowed;
+
+            if (!TryGetAllowed(ev.Player, out allowed))
+                return;
+
+            if (ev.Firearm != null && ev.Firearm.Serial == allowed)
                 return;
 
             ev.IsAllowed = false;
@@ -134,8 +135,23 @@ namespace EventHUD.SpecItems
 
         private static void OnLeft(LeftEventArgs ev)
         {
-            if (!(ev.Player is null) && !string.IsNullOrEmpty(ev.Player.UserId))
-                LockedIds.Remove(ev.Player.UserId);
+            if (ev.Player != null)
+                Locked.Remove(ev.Player.UserId ?? ev.Player.Nickname);
+        }
+
+        private static void OnDied(DiedEventArgs ev)
+        {
+            if (ev.Player != null && Locked.Remove(ev.Player.UserId ?? ev.Player.Nickname))
+                SpecDebug.Log("ЛОК: " + ev.Player.Nickname + " разблокирован (смерть)");
+        }
+
+        private static void OnRoundStarted()
+        {
+            if (Locked.Count > 0)
+                SpecDebug.Log("ЛОК: рестарт раунда, снято блокировок: " + Locked.Count);
+
+            Locked.Clear();
+            TowerTeleporter.ResetState();
         }
     }
 }
