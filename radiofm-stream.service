@@ -1,0 +1,12 @@
+[Unit]
+Description=RadioFM stream splitter
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/scpsl/radiofm-stream.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
